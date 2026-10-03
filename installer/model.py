@@ -691,7 +691,10 @@ def _is_substantive(text: str | None) -> bool:
     if len(body) < 32:
         return False
     lower = body.lower()
-    return not any(pattern in lower for pattern in PLACEHOLDER_PATTERNS)
+    # Placeholder detection must identify template text itself, not reject real
+    # project state merely because it contains generic phrases such as
+    # "capture the ..." or "record the ...".
+    return not any(lower.startswith(pattern) for pattern in PLACEHOLDER_PATTERNS)
 
 
 def _durable_entry_spans(text: str | None) -> tuple[list[str], list[tuple[int, int, str]]]:
