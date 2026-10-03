@@ -21,3 +21,11 @@ does not own their identities or professional state.
 
 The repository split does not silently migrate existing consumer state. Compatibility changes that
 alter on-disk state require an explicit schema migration.
+
+
+## Provenance boundary
+
+Installed Project Manager state records Context Capsule Core compatibility and Project Manager
+implementation provenance as separate immutable coordinates. Project Manager lifecycle integrity
+binds PM-managed governing files to the Project Manager coordinate; it does not reinterpret the
+Context Capsule Core coordinate as PM source authority.
