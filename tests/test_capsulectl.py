@@ -290,6 +290,20 @@ class ContextCapsuleV2Tests(unittest.TestCase):
         ))
         self.assertTrue(readiness_snapshot(installed)[0])
 
+    def test_substantive_state_can_contain_generic_template_phrases_later(self):
+        overrides = ready_overrides()
+        overrides[".context/manager/plans.md"] = (
+            "# Manager plans\n\n"
+            "1. Verify the current implementation against repository evidence.\n"
+            "2. Capture the actual runtime exchange before changing the transport model.\n"
+            "3. Record the observed result only after independent verification.\n"
+        )
+        installed = apply({}, clean_install_changes(
+            {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=overrides
+        ))
+        ready, reasons = readiness_snapshot(installed)
+        self.assertTrue(ready, reasons)
+
     def test_beliefs_require_provenance(self):
         overrides = ready_overrides()
         overrides[".context/manager/beliefs.md"] = "# Beliefs\n\nThe implementation is correct because the manager believes so.\n"
