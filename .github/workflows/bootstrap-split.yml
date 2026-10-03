@@ -1,0 +1,204 @@
+name: Bootstrap Project Manager split
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Skip after completed bootstrap
+        id: guard
+        shell: bash
+        run: |
+          if [ -f AUTHORITY_SPLIT_COMPLETE ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract Project Manager authority
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        env:
+          SOURCE_REPO: https://github.com/lvlaksim1/context-capsule.git
+          SOURCE_COMMIT: 724c3e1c1960497b38eec106a4e9999305e5a046
+        run: |
+          set -euo pipefail
+
+          git clone --quiet "$SOURCE_REPO" /tmp/context-capsule
+          git -C /tmp/context-capsule checkout --quiet --detach "$SOURCE_COMMIT"
+
+          rm -rf installer templates schemas spec tests
+          cp -a /tmp/context-capsule/installer .
+          cp -a /tmp/context-capsule/templates .
+          cp -a /tmp/context-capsule/schemas .
+          cp -a /tmp/context-capsule/spec .
+          cp -a /tmp/context-capsule/tests .
+
+          rm -f installer/service_agent.py
+          rm -f tests/test_service_agent.py
+          rm -f schemas/service-agent-identity.schema.json
+          rm -f schemas/service-agent-manifest.schema.json
+          rm -f schemas/service-invocation.schema.json
+          rm -f schemas/service-result.schema.json
+          rm -f spec/service-agent-base-v1.md
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path(".")
+          src = (root / "installer/capsulectl.py").read_text(encoding="utf-8")
+          src = re.sub(
+              r"from installer\.service_agent import \([\s\S]*?\)\n\n",
+              "",
+              src,
+              count=1,
+          )
+          src = src.replace('SERVICE_TEMPLATES = CORE_ROOT / "service-agent-templates"\n', "")
+          start = src.index("def _apply_service_planned")
+          end = src.index("def build_parser")
+          src = src[:start] + src[end:]
+          src = re.sub(
+              r"    service_install = sub\.add_parser[\s\S]*?    service_recover\.set_defaults\(func=cmd_service_recover\)\n",
+              "",
+              src,
+              count=1,
+          )
+          src = src.replace(
+              'argparse.ArgumentParser(prog="capsulectl", description="Context Capsule Project Manager lifecycle helper")',
+              'argparse.ArgumentParser(prog="pmctl", description="Context Capsule Project Manager lifecycle helper")',
+          )
+          (root / "installer/pmctl.py").write_text(src, encoding="utf-8")
+          (root / "installer/capsulectl.py").unlink()
+
+          model = root / "installer/model.py"
+          text = model.read_text(encoding="utf-8")
+          text = text.replace(
+              'SOURCE_REPOSITORY = "lvlaksim1/context-capsule"',
+              'SOURCE_REPOSITORY = "lvlaksim1/context-capsule-project-manager"',
+          )
+          model.write_text(text, encoding="utf-8")
+
+          for path in (root / "tests").glob("test_*.py"):
+              text = path.read_text(encoding="utf-8")
+              text = text.replace("installer/capsulectl.py", "installer/pmctl.py")
+              text = text.replace("installer.capsulectl", "installer.pmctl")
+              text = text.replace("capsulectl.py", "pmctl.py")
+              path.write_text(text, encoding="utf-8")
+          PY
+
+          cat > README.md <<'EOF'
+          # Context Capsule Project Manager
+
+          Portable Project Manager built on the Context Capsule durable-context contract.
+
+          ## Product boundary
+
+          This repository is the authoritative source for **Project Manager v2**. It owns:
+
+          - Project Manager identity, mandate, BDI state and lifecycle semantics;
+          - manager-specific schemas and templates;
+          - install / upgrade / repair / validate / ready / recover tooling;
+          - manager authority, evidence, memory and delegation contracts.
+
+          It does **not** own the generic Context Capsule product and it does not own Service Agent profiles.
+
+          - Context Capsule Core: `lvlaksim1/context-capsule`
+          - Project Manager: `lvlaksim1/context-capsule-project-manager`
+          - Auditor: `lvlaksim1/project-manager-auditor`
+          - Supervisor: `lvlaksim1/supervisor`
+          - Repository provisioning: `lvlaksim1/repo-factory`
+
+          ## Migration provenance
+
+          Split from `lvlaksim1/context-capsule:v2-manager-runtime` at immutable source commit
+          `724c3e1c1960497b38eec106a4e9999305e5a046`.
+
+          The old branch is migration history. New PM product development belongs here.
+
+          ## Compatibility
+
+          The first split preserves the existing v2 on-disk contract, including the legacy
+          `core_commit` provenance coordinate. This avoids silently rewriting installed managers.
+
+          A later explicit schema migration will separate Context Capsule Core provenance from
+          Project Manager product provenance.
+
+          ## CLI
+
+          ```bash
+          python installer/pmctl.py install --target /repo --repository owner/name --branch main --core-commit <pm-source-commit>
+          python installer/pmctl.py upgrade --target /repo --repository owner/name --branch main --core-commit <pm-source-commit>
+          python installer/pmctl.py repair --target /repo --repository owner/name --branch main --core-commit <pm-source-commit>
+          python installer/pmctl.py validate --target /repo
+          python installer/pmctl.py ready --target /repo
+          python installer/pmctl.py recover --target /repo
+          ```
+          EOF
+
+          cat > CONTEXT_CAPSULE_COMPATIBILITY.md <<'EOF'
+          # Context Capsule compatibility
+
+          Project Manager v2 was extracted from the former combined v2 development line.
+
+          Current compatibility rule:
+
+          - existing v2 capsules keep their current on-disk schema;
+          - stable `manager_id`, project semantics, memory and branch topology are preserved;
+          - no consumer is silently upgraded by the repository split;
+          - new Project Manager product authority is this repository;
+          - generic Context Capsule Core authority remains `lvlaksim1/context-capsule`;
+          - Core provenance and PM provenance will be split only through an explicit schema migration.
+          EOF
+
+          printf '%s\n' '2.0.0-dev' > VERSION
+          printf '%s\n' 'lvlaksim1/context-capsule-project-manager' > SOURCE_REPOSITORY
+          printf '%s\n' 'lvlaksim1/context-capsule@724c3e1c1960497b38eec106a4e9999305e5a046' > UPSTREAM_MIGRATION_BASE
+          printf '%s\n' 'Project Manager authority split completed from immutable upstream commit.' > AUTHORITY_SPLIT_COMPLETE
+
+          mkdir -p .github/workflows
+          cat > .github/workflows/ci.yml <<'EOF'
+          name: Project Manager CI
+
+          on:
+            push:
+              branches: [main]
+            pull_request:
+
+          permissions:
+            contents: read
+
+          jobs:
+            test:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                  with:
+                    fetch-depth: 0
+                - uses: actions/setup-python@v5
+                  with:
+                    python-version: '3.13'
+                - name: Run Project Manager tests
+                  run: python -m unittest discover -s tests -v
+                - name: Compile lifecycle modules
+                  run: python -m compileall -q installer
+                - name: CLI help smoke
+                  run: python installer/pmctl.py --help
+          EOF
+
+          git config user.name "repo-factory-migration"
+          git config user.email "repo-factory-migration@users.noreply.github.com"
+          git add -A
+          git commit -m "Establish Project Manager v2 product authority"
+          git push origin HEAD:main
