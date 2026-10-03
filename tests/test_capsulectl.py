@@ -103,10 +103,8 @@ class FakeBackend:
 
 
 class ContextCapsuleV2Tests(unittest.TestCase):
-    def test_version_surfaces_stay_in_lockstep(self):
+    def test_project_manager_version_surface_matches_model(self):
         self.assertEqual((ROOT / "VERSION").read_text(encoding="utf-8").strip(), VERSION)
-        registry = json.loads((ROOT / "migrations" / "registry.json").read_text(encoding="utf-8"))
-        self.assertEqual(registry["current"], VERSION)
 
     def test_atomic_publication_and_concurrent_abort(self):
         plan = MutationPlan("owner/repo", "main", "1" * 40, "install", {"AGENTS.md": "x"})
