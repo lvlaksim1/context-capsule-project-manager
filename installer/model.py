@@ -12,6 +12,8 @@ from .safety import CapsuleSafetyError, normalize_repo_path, render_managed_bloc
 
 VERSION = "2.0.0-dev"
 SOURCE_REPOSITORY = "lvlaksim1/context-capsule-project-manager"
+CONTEXT_CAPSULE_REPOSITORY = "lvlaksim1/context-capsule"
+DEFAULT_CONTEXT_CAPSULE_COMMIT = "2ef41a5ed57ae514cc5980065560d7e55d5e4b9a"
 MANIFEST_SCHEMA_VERSION = 4
 MANAGER_IDENTITY_SCHEMA_VERSION = 1
 MANAGER_IDENTITY_PATH = ".context/manager/identity.json"
@@ -24,7 +26,8 @@ SYSTEM_TEXT_PATHS = (
     ".context/manager/CONTRACT.md",
     ".context/manager/PROTOCOL.md",
 )
-CORE_GOVERNING_PATHS = SYSTEM_TEXT_PATHS
+PROJECT_MANAGER_GOVERNING_PATHS = SYSTEM_TEXT_PATHS
+CORE_GOVERNING_PATHS = PROJECT_MANAGER_GOVERNING_PATHS  # deprecated compatibility alias
 _PROVENANCE_ENTRY_START = re.compile(r"^(?:[-*+]\s+|\d+[.)]\s+)")
 PROJECT_SEED_PATHS = (
     ".context/project/identity.md",
@@ -156,10 +159,16 @@ def build_capsule_metadata(
     repository: str,
     core_commit: str,
     *,
+    context_capsule_commit: str | None = None,
     existing: dict | None = None,
     adopted_from: str | None = None,
 ) -> dict:
-    validate_core_commit(core_commit)
+    # Compatibility note: the historical parameter name core_commit carries the
+    # Project Manager source commit for v2. New metadata records both products.
+    project_manager_commit = validate_core_commit(core_commit)
+    context_capsule_commit = validate_core_commit(
+        context_capsule_commit or DEFAULT_CONTEXT_CAPSULE_COMMIT
+    )
     old = copy.deepcopy(existing or {})
     result = old
     result.update(
@@ -167,7 +176,20 @@ def build_capsule_metadata(
             "schema": "context-capsule",
             "version": VERSION,
             "source": SOURCE_REPOSITORY,
-            "core_commit": core_commit,
+            # Deprecated compatibility alias retained for existing v2 consumers.
+            "core_commit": project_manager_commit,
+            "project_manager_commit": project_manager_commit,
+            "context_capsule_commit": context_capsule_commit,
+            "provenance": {
+                "context_capsule": {
+                    "repository": CONTEXT_CAPSULE_REPOSITORY,
+                    "commit": context_capsule_commit,
+                },
+                "project_manager": {
+                    "repository": SOURCE_REPOSITORY,
+                    "commit": project_manager_commit,
+                },
+            },
             "installed_at": old.get("installed_at") or dt.date.today().isoformat(),
             "repository": repository,
             "update_policy": "manual",
@@ -176,7 +198,6 @@ def build_capsule_metadata(
     if adopted_from:
         result["adopted_from"] = adopted_from
     return result
-
 
 def build_manager_identity(repository: str, *, existing: dict | None = None) -> dict:
     old = copy.deepcopy(existing or {})
@@ -495,10 +516,31 @@ def validate_snapshot(
             errors.append("capsule.json: invalid schema")
         if meta.get("version") != VERSION:
             errors.append(f"capsule.json: version must be {VERSION}; use explicit upgrade for older capsules")
-        try:
-            validate_core_commit(meta.get("core_commit", ""))
-        except CapsuleSafetyError as exc:
-            errors.append(f"capsule.json: {exc}")
+        provenance = meta.get("provenance")
+        if isinstance(provenance, dict):
+            pm = provenance.get("project_manager")
+            cc = provenance.get("context_capsule")
+            if not isinstance(pm, dict) or pm.get("repository") != SOURCE_REPOSITORY:
+                errors.append("capsule.json: provenance.project_manager.repository is invalid")
+            if not isinstance(cc, dict) or cc.get("repository") != CONTEXT_CAPSULE_REPOSITORY:
+                errors.append("capsule.json: provenance.context_capsule.repository is invalid")
+            try:
+                pm_commit = validate_core_commit(pm.get("commit", "") if isinstance(pm, dict) else "")
+                cc_commit = validate_core_commit(cc.get("commit", "") if isinstance(cc, dict) else "")
+                if meta.get("project_manager_commit") not in (None, pm_commit):
+                    errors.append("capsule.json: project_manager_commit disagrees with provenance")
+                if meta.get("context_capsule_commit") not in (None, cc_commit):
+                    errors.append("capsule.json: context_capsule_commit disagrees with provenance")
+                if meta.get("core_commit") not in (None, pm_commit):
+                    errors.append("capsule.json: deprecated core_commit alias disagrees with Project Manager provenance")
+            except CapsuleSafetyError as exc:
+                errors.append(f"capsule.json: {exc}")
+        else:
+            # Legacy v2 metadata: core_commit historically carried the PM source commit.
+            try:
+                validate_core_commit(meta.get("core_commit", ""))
+            except CapsuleSafetyError as exc:
+                errors.append(f"capsule.json: {exc}")
         if not isinstance(meta.get("repository"), str) or meta["repository"].count("/") != 1:
             errors.append("capsule.json: repository must be owner/name")
         if meta.get("update_policy") != "manual":
@@ -711,19 +753,19 @@ def _core_binding_errors(
     require_core_binding: bool,
 ) -> list[str]:
     if core_reference is None:
-        return ["core provenance binding reference is required"] if require_core_binding else []
+        return ["Project Manager provenance binding reference is required"] if require_core_binding else []
     errors: list[str] = []
     for path in CORE_GOVERNING_PATHS:
         expected = core_reference.get(path)
         if expected is None:
-            errors.append(f"core provenance reference missing governing file: {path}")
+            errors.append(f"Project Manager provenance reference missing governing file: {path}")
             continue
         actual = files.get(path)
         if actual is None:
             continue
         if actual != expected:
             errors.append(
-                f"core provenance mismatch: {path} does not match the declared core_commit"
+                f"Project Manager provenance mismatch: {path} does not match the declared Project Manager commit"
             )
     return errors
 
@@ -1052,6 +1094,7 @@ def clean_install_changes(
     branch: str,
     core_commit: str,
     *,
+    context_capsule_commit: str | None = None,
     semantic_overrides: dict[str, str] | None = None,
     discovery_branch: str | None = None,
     product_branch: str | None = None,
@@ -1070,7 +1113,7 @@ def clean_install_changes(
                 raise CapsuleModelError(f"semantic override must be inside .context/: {path}")
             provisional[path] = content
 
-    meta = build_capsule_metadata(repository, core_commit)
+    meta = build_capsule_metadata(repository, core_commit, context_capsule_commit=context_capsule_commit)
     provisional[".context/capsule.json"] = canonical_json(meta)
     redirect_topology = None
     if discovery_branch and discovery_branch != branch:
@@ -1101,6 +1144,7 @@ def upgrade_changes(
     repository: str,
     branch: str,
     core_commit: str,
+    context_capsule_commit: str | None = None,
     product_branch: str | None = None,
 ) -> dict[str, str]:
     existing_manifest = parse_json_text(files, ".context/manifest.json") or {}
@@ -1114,11 +1158,20 @@ def upgrade_changes(
             f"upgrade must run against authoritative branch {authoritative_branch!r}, not {branch!r}"
         )
     validate_core_commit(core_commit)
+    if context_capsule_commit is None:
+        legacy_core_commit = existing_meta.get("core_commit")
+        if isinstance(legacy_core_commit, str):
+            context_capsule_commit = legacy_core_commit
     provisional = dict(files)
     provisional.update(bootstrap_changes(files, template_root))
     _seed_v2_structure(provisional, template_root, repository, overwrite_system=True)
     provisional[".context/capsule.json"] = canonical_json(
-        build_capsule_metadata(repository, core_commit, existing=existing_meta)
+        build_capsule_metadata(
+            repository,
+            core_commit,
+            context_capsule_commit=context_capsule_commit,
+            existing=existing_meta,
+        )
     )
     provisional[".context/manifest.json"] = canonical_json(
         build_manifest(
@@ -1147,6 +1200,7 @@ def repair_changes(
     repository: str,
     branch: str,
     core_commit: str,
+    context_capsule_commit: str | None = None,
 ) -> dict[str, str]:
     existing_manifest = parse_json_text(files, ".context/manifest.json") or {}
     existing_meta = parse_json_text(files, ".context/capsule.json") or {}
@@ -1174,7 +1228,12 @@ def repair_changes(
     provisional.update(bootstrap_changes(files, template_root))
     _seed_v2_structure(provisional, template_root, repository, overwrite_system=True)
     provisional[".context/capsule.json"] = canonical_json(
-        build_capsule_metadata(repository, core_commit, existing=existing_meta)
+        build_capsule_metadata(
+            repository,
+            core_commit,
+            context_capsule_commit=context_capsule_commit,
+            existing=existing_meta,
+        )
     )
     provisional[".context/manifest.json"] = canonical_json(
         build_manifest(provisional, repository, branch, existing=existing_manifest)
