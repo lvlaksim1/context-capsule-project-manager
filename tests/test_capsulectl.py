@@ -124,10 +124,56 @@ class ContextCapsuleV2Tests(unittest.TestCase):
         self.assertTrue(any("manager.mandate" in x for x in reasons))
         identity = json.loads(installed[".context/manager/identity.json"])
         self.assertEqual(identity["manager_id"], "project-manager")
+        metadata = json.loads(installed[".context/capsule.json"])
+        self.assertEqual(metadata["project_manager_commit"], CORE_SHA)
+        self.assertEqual(
+            metadata["context_capsule_commit"],
+            "2ef41a5ed57ae514cc5980065560d7e55d5e4b9a",
+        )
+        self.assertEqual(
+            metadata["provenance"]["project_manager"]["repository"],
+            "lvlaksim1/context-capsule-project-manager",
+        )
+        self.assertEqual(
+            metadata["provenance"]["context_capsule"]["repository"],
+            "lvlaksim1/context-capsule",
+        )
         self.assertEqual(identity["continuity"], "runtime-independent")
         manifest = json.loads(installed[".context/manifest.json"])
         self.assertEqual(manifest["authority"]["manager_state_branch"], "main")
         self.assertEqual(manifest["authority"]["product_branch"], "main")
+
+
+    def test_legacy_v2_core_commit_is_accepted_and_repair_enriches_provenance(self):
+        installed = apply({}, clean_install_changes(
+            {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=ready_overrides()
+        ))
+        metadata = json.loads(installed[".context/capsule.json"])
+        legacy = dict(metadata)
+        legacy.pop("provenance", None)
+        legacy.pop("project_manager_commit", None)
+        legacy.pop("context_capsule_commit", None)
+        installed[".context/capsule.json"] = json.dumps(legacy, indent=2) + "\n"
+        self.assertEqual(validate_snapshot(installed), [])
+
+        repaired = apply(
+            installed,
+            repair_changes(
+                installed,
+                TEMPLATES,
+                repository="owner/repo",
+                branch="main",
+                core_commit=CORE_SHA,
+                context_capsule_commit="b" * 40,
+            ),
+        )
+        migrated = json.loads(repaired[".context/capsule.json"])
+        self.assertEqual(migrated["core_commit"], CORE_SHA)
+        self.assertEqual(migrated["project_manager_commit"], CORE_SHA)
+        self.assertEqual(migrated["context_capsule_commit"], "b" * 40)
+        self.assertEqual(
+            migrated["provenance"]["context_capsule"]["commit"], "b" * 40
+        )
 
     def test_manager_reinstantiation_pack_preserves_identity_and_commitment(self):
         installed = apply({}, clean_install_changes(
@@ -270,7 +316,7 @@ class ContextCapsuleV2Tests(unittest.TestCase):
             core_reference=core_reference,
             require_core_binding=True,
         )
-        self.assertTrue(any("core provenance mismatch" in error for error in errors))
+        self.assertTrue(any("Project Manager provenance mismatch" in error for error in errors))
 
         ready, reasons = readiness_snapshot(
             tampered,
@@ -278,8 +324,8 @@ class ContextCapsuleV2Tests(unittest.TestCase):
             require_core_binding=True,
         )
         self.assertFalse(ready)
-        self.assertTrue(any("core provenance mismatch" in reason for reason in reasons))
-        with self.assertRaisesRegex(CapsuleModelError, "core provenance mismatch"):
+        self.assertTrue(any("Project Manager provenance mismatch" in reason for reason in reasons))
+        with self.assertRaisesRegex(CapsuleModelError, "Project Manager provenance mismatch"):
             build_recovery_pack(
                 tampered,
                 core_reference=core_reference,
