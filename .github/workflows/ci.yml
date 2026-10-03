@@ -18,16 +18,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Prepare installed Project Manager fixture
-        run: |
-          python installer/pmctl.py install \
-            --target . \
-            --repository lvlaksim1/context-capsule-project-manager \
-            --branch main \
-            --core-commit "$GITHUB_SHA"
       - name: Run Project Manager tests
         run: python -m unittest discover -s tests -v
       - name: Compile lifecycle modules
         run: python -m compileall -q installer
       - name: CLI help smoke
         run: python installer/pmctl.py --help
+      - name: Self validate
+        run: python installer/pmctl.py validate --target .
+      - name: Self readiness
+        shell: bash
+        run: |
+          EXTRA=()
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            EXTRA+=(--non-authoritative)
+          fi
+          python installer/pmctl.py ready --target . "${EXTRA[@]}"
+      - name: Reinstantiation smoke
+        shell: bash
+        run: |
+          EXTRA=()
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            EXTRA+=(--non-authoritative)
+          fi
+          python installer/pmctl.py recover --target . --max-chars 65536 "${EXTRA[@]}" > /tmp/pm-recovery.txt
+          test -s /tmp/pm-recovery.txt
+          grep -q "Manager ID: context-capsule-project-manager" /tmp/pm-recovery.txt
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            grep -q "NON-AUTHORITATIVE MAINTENANCE/AUDIT PACK" /tmp/pm-recovery.txt
+          else
+            grep -q "new runtime instance of the existing Project Manager" /tmp/pm-recovery.txt
+          fi
