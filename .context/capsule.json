@@ -1,0 +1,9 @@
+{
+  "schema": "context-capsule",
+  "version": "2.0.0-dev",
+  "source": "lvlaksim1/context-capsule-project-manager",
+  "core_commit": "0544517c14e115a70e40d1324d1e594035971eaa",
+  "installed_at": "2026-10-03",
+  "repository": "lvlaksim1/context-capsule-project-manager",
+  "update_policy": "manual"
+}
