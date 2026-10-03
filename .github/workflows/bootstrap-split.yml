@@ -167,36 +167,6 @@ jobs:
           printf '%s\n' 'lvlaksim1/context-capsule@724c3e1c1960497b38eec106a4e9999305e5a046' > UPSTREAM_MIGRATION_BASE
           printf '%s\n' 'Project Manager authority split completed from immutable upstream commit.' > AUTHORITY_SPLIT_COMPLETE
 
-          mkdir -p .github/workflows
-          cat > .github/workflows/ci.yml <<'EOF'
-          name: Project Manager CI
-
-          on:
-            push:
-              branches: [main]
-            pull_request:
-
-          permissions:
-            contents: read
-
-          jobs:
-            test:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@v4
-                  with:
-                    fetch-depth: 0
-                - uses: actions/setup-python@v5
-                  with:
-                    python-version: '3.13'
-                - name: Run Project Manager tests
-                  run: python -m unittest discover -s tests -v
-                - name: Compile lifecycle modules
-                  run: python -m compileall -q installer
-                - name: CLI help smoke
-                  run: python installer/pmctl.py --help
-          EOF
-
           git config user.name "repo-factory-migration"
           git config user.email "repo-factory-migration@users.noreply.github.com"
           git add -A
