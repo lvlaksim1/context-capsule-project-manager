@@ -14,6 +14,7 @@ from installer.model import (
     VERSION,
     build_manager_state_integrity,
     build_recovery_pack,
+    legacy_provenance_changes,
     clean_install_changes,
     discovery_redirect_changes,
     readiness_snapshot,
@@ -363,6 +364,79 @@ class ContextCapsuleV2Tests(unittest.TestCase):
             ready, reasons = readiness_snapshot(installed)
             self.assertFalse(ready)
             self.assertTrue(any(label in reason for reason in reasons), (path, reasons))
+
+    def test_nested_provenance_bullets_belong_to_parent_belief(self):
+        overrides = ready_overrides()
+        overrides[".context/manager/beliefs.md"] = (
+            "# Beliefs\n\n"
+            "- The release candidate passed validation.\n"
+            "  - source: workflow run 123\n"
+            "  - authority: verified-ci\n"
+            "- The owner approved the release direction.\n"
+            "  - source: owner directive\n"
+            "  - authority: owner-directive\n"
+        )
+        installed = apply({}, clean_install_changes(
+            {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=overrides
+        ))
+        ready, reasons = readiness_snapshot(installed)
+        self.assertTrue(ready, reasons)
+
+    def test_sectioned_memory_uses_section_level_provenance(self):
+        overrides = ready_overrides()
+        overrides[".context/memory/semantic.md"] = (
+            "# Semantic memory\n\n"
+            "## SM-001 — reusable rule\n\n"
+            "Keep the release path deterministic.\n\n"
+            "- source: repository policy\n"
+            "- authority: verified-repository\n\n"
+            "## SM-002 — owner constraint\n\n"
+            "Do not publish without approval.\n\n"
+            "- source: owner directive\n"
+            "- authority: owner-directive\n"
+        )
+        installed = apply({}, clean_install_changes(
+            {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=overrides
+        ))
+        ready, reasons = readiness_snapshot(installed)
+        self.assertTrue(ready, reasons)
+
+    def test_legacy_provenance_normalizer_marks_only_unattributed_entries(self):
+        overrides = ready_overrides()
+        overrides[".context/manager/beliefs.md"] = (
+            "# Beliefs\n\n"
+            "- Legacy verified-looking statement without recorded provenance.\n"
+        )
+        overrides[".context/memory/semantic.md"] = (
+            "# Semantic memory\n\n"
+            "## Legacy section\n\n"
+            "Reusable legacy knowledge without recorded provenance.\n"
+        )
+        overrides[".context/memory/procedural.md"] = (
+            "# Procedural memory\n\n"
+            "- Existing attributed workflow. source: contract; authority: core-contract.\n"
+            "- Legacy workflow without recorded provenance.\n"
+        )
+        installed = apply({}, clean_install_changes(
+            {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=overrides
+        ))
+        before_marker = json.loads(installed[".context/manager/state-integrity.json"])
+        changes = legacy_provenance_changes(installed)
+        migrated = apply(installed, changes)
+
+        self.assertIn("source: legacy-v2-state", migrated[".context/manager/beliefs.md"])
+        self.assertIn("authority: legacy-unverified", migrated[".context/manager/beliefs.md"])
+        self.assertIn("source: legacy-v2-state", migrated[".context/memory/semantic.md"])
+        self.assertIn("authority: legacy-unverified", migrated[".context/memory/semantic.md"])
+        self.assertEqual(
+            migrated[".context/memory/procedural.md"].count("source: contract"),
+            1,
+        )
+        self.assertIn("Legacy workflow without recorded provenance.", migrated[".context/memory/procedural.md"])
+        after_marker = json.loads(migrated[".context/manager/state-integrity.json"])
+        self.assertEqual(after_marker["generation"], before_marker["generation"] + 1)
+        ready, reasons = readiness_snapshot(migrated)
+        self.assertTrue(ready, reasons)
 
     def test_non_authoritative_checkout_cannot_reinstantiate_manager(self):
         installed = apply({}, clean_install_changes(
