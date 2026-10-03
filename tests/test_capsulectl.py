@@ -192,6 +192,22 @@ class ContextCapsuleV2Tests(unittest.TestCase):
         self.assertLess(pack.index("## MANAGER PROTOCOL"), pack.index("## WORKING VIEW — CURRENT STATE (NON-AUTHORITATIVE)"))
         self.assertLess(pack.index("## MANAGER INTENTIONS"), pack.index("## DURABLE DECISION"))
 
+    def test_default_recovery_budget_accommodates_large_valid_manager_state(self):
+        overrides = ready_overrides()
+        overrides[".context/manager/beliefs.md"] = (
+            "# Manager beliefs\n\n"
+            "- " + ("Verified durable context " * 2300)
+            + " source: repository evidence; authority: verified-repository.\n"
+        )
+        installed = apply({}, clean_install_changes(
+            {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=overrides
+        ))
+        pack = build_recovery_pack(installed)
+        self.assertGreater(len(pack), 65536)
+        self.assertLessEqual(len(pack), 131072)
+        with self.assertRaisesRegex(CapsuleModelError, "recovery budget too small"):
+            build_recovery_pack(installed, max_chars=65536)
+
     def test_project_manager_contract_is_installed_and_manifested(self):
         installed = apply({}, clean_install_changes(
             {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=ready_overrides()
