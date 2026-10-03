@@ -1,0 +1,121 @@
+name: Bootstrap durable manager state
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install and verify durable state
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .context/manifest.json ]; then
+            echo "Durable state already exists."
+            exit 0
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from installer.model import clean_install_changes
+          from installer.pmctl import apply_local_changes
+
+          root = Path(".").resolve()
+          files = {}
+          for rel in ("AI_CONTEXT.md", "AGENTS.md"):
+              p = root / rel
+              if p.exists():
+                  files[rel] = p.read_text(encoding="utf-8")
+
+          def md(title, body):
+              return f"# {title}\n\n{body.strip()}\n"
+
+          identity = {
+              "schema": "context-capsule-manager-identity",
+              "schema_version": 1,
+              "manager_id": "context-capsule-project-manager",
+              "role": "Project Manager",
+              "repository": "lvlaksim1/context-capsule-project-manager",
+              "continuity": "runtime-independent",
+              "authority_model": "bounded-by-mandate",
+              "state_model": "beliefs-goals-intentions-plans",
+              "memory_model": "typed-with-provenance"
+          }
+
+          ov = {
+              ".context/manager/identity.json": json.dumps(identity, indent=2) + "\n",
+              ".context/project/identity.md": md("Project identity",
+                  "`lvlaksim1/context-capsule-project-manager` is the authoritative source for Project Manager v2. Context Capsule Core, Auditor, Supervisor, and repo-factory are separate products."),
+              ".context/project/goals.md": md("Project goals",
+                  "- Keep Project Manager portable, runtime-independent, testable, and independently versioned.\n- Preserve durable identity, BDI state, typed memory, provenance, and deterministic recovery.\n- Keep installed-state migrations explicit and compatible."),
+              ".context/project/architecture.md": md("Project architecture",
+                  "Dependency direction: Context Capsule contract <- Project Manager <- consumer repository. repo-factory distributes exact verified PM commits. Auditor and Supervisor remain independent peers."),
+              ".context/project/constraints.md": md("Project constraints",
+                  "- New PM behavior belongs here, not in the historical combined branch.\n- No silent consumer migration.\n- No Service Agent identity/state in this product.\n- Stable promotion and authority-model changes require explicit Owner approval and applicable audit gates."),
+              ".context/current/state.md": md("Current state",
+                  "The PM source-authority split is complete. Verified PM baseline `0544517c14e115a70e40d1324d1e594035971eaa` passed CI run `37158811501`. repo-factory component-contract smoke passed run `37158937697`."),
+              ".context/current/blockers.md": md("Blockers",
+                  "No blocker prevents ordinary PM development. A future explicit schema migration is required to split legacy `core_commit` into separate Core and PM provenance coordinates."),
+              ".context/current/next.md": md("Next",
+                  "- Preserve green CI and factory contract smoke.\n- Design and isolate-test the provenance-coordinate migration.\n- Keep generic durable-context concerns in Context Capsule Core and manager behavior here."),
+              ".context/rules/project-rules.md": md("Project rules",
+                  "- Distribution pins are exact immutable SHAs and advance only after verification.\n- Durable reusable findings must be persisted when they change future action or prevent repeated mistakes.\n- Repair never performs a silent major migration."),
+              ".context/decisions/README.md": md("Decisions",
+                  "Architecture decisions affecting compatibility, authority, lifecycle, or persistence are durable project state. The 2026-10-04 split established this repository as PM authority while preserving the old branch as migration provenance."),
+              ".context/handoffs/latest.md": md("Handoff",
+                  "Continue Project Manager development here. Preserve exact component pins, explicit migration gates, and independent Auditor/Supervisor boundaries."),
+              ".context/dialogues/README.md": md("Dialogues",
+                  "Conversation transcripts are evidence, not authoritative identity. Durable conclusions belong in beliefs, decisions, or memory."),
+              ".context/history/README.md": md("History",
+                  "Git history and UPSTREAM_MIGRATION_BASE are the canonical migration-history references."),
+              ".context/manager/mandate.md": md("Manager mandate",
+                  "The Context Capsule Project Manager is the primary persistent operational manager/developer for ordinary work in this repository. It may research, implement, test, diagnose CI, and maintain durable project state. It may not expand its own authority, silently migrate consumers, collapse independent audit/supervision boundaries, or promote fundamental authority changes without Owner approval."),
+              ".context/manager/beliefs.md": md("Manager beliefs",
+                  "- PM v2 source authority is this repository; baseline `0544517c14e115a70e40d1324d1e594035971eaa` passed CI run `37158811501`. source: GitHub Actions and repository state; authority: verified-repository.\n- Context Capsule Core is a separate product; `v2-manager-runtime` is migration provenance, not new PM authority. source: context-capsule boundary commits; authority: owner-directed-architecture plus verified-repository.\n- repo-factory uses exact component pins and verified temporary installs. source: components.lock.json and smoke run 37158937697; authority: verified-repository.\n- Existing consumers are not silently migrated by this split. source: compatibility contract; authority: owner-directive plus verified-repository."),
+              ".context/manager/goals.md": md("Manager goals",
+                  "1. Maintain coherent Project Manager v2 behavior and continuity.\n2. Keep PM independently versionable from Core and service agents.\n3. Preserve compatibility until explicit migration approval.\n4. Keep distribution evidence auditable."),
+              ".context/manager/intentions.md": md("Manager intentions",
+                  "- Treat this repository as the sole new PM product authority.\n- Advance factory pins only after exact-commit verification.\n- Preserve consumer state absent explicit migration.\n- Persist reusable verified findings through the Durable Finding Gate."),
+              ".context/manager/plans.md": md("Manager plans",
+                  "1. Maintain the verified split baseline.\n2. Keep CI and factory smoke green.\n3. Specify separate Core/PM provenance coordinates.\n4. Validate migration on isolated consumers.\n5. Obtain Owner approval and independent verification before stable rollout."),
+              ".context/memory/index.md": md("Memory index",
+                  "Semantic memory stores durable architecture knowledge. Procedural memory stores repeatable verification and migration practice. Git history retains detailed migration evidence."),
+              ".context/memory/semantic.md": md("Semantic memory",
+                  "- Agent identity/state and runtime execution are separate concerns. source: PM v2 recovery contract/tests; authority: verified-repository.\n- Context format and Project Manager behavior have different lifecycles and separate source authorities. source: 2026-10-04 Owner-approved split; authority: owner-directive plus verified-repository.\n- One component lock is safer than duplicated hidden pins. source: repo-factory lock migration; authority: verified-repository.\n- Freshness alone does not imply semantic supersession. source: PM evidence-revision contract; authority: verified-repository-design."),
+              ".context/memory/procedural.md": md("Procedural memory",
+                  "- Before advancing the PM distribution pin, require successful PM CI on the exact candidate and factory component-contract smoke after lock update. source: 2026-10-04 split procedure; authority: verified-repository-procedure.\n- Preserve the former authority as migration provenance until consumers/tooling have moved. source: 2026-10-04 split execution; authority: owner-approved-procedure.\n- Treat provenance-schema changes as explicit migrations, never repair. source: PM lifecycle contract; authority: verified-repository-design."),
+              ".context/memory/episodes/README.md": md("Episodic memory",
+                  "The authority split is represented by immutable Git history, current state, and semantic/procedural memory; no separate episode is required.")
+          }
+
+          changes = clean_install_changes(
+              files,
+              root / "templates",
+              "lvlaksim1/context-capsule-project-manager",
+              "main",
+              "0544517c14e115a70e40d1324d1e594035971eaa",
+              semantic_overrides=ov,
+              product_branch="main"
+          )
+          apply_local_changes(root, changes)
+          PY
+
+          python installer/pmctl.py validate --target .
+          python installer/pmctl.py ready --target .
+          python installer/pmctl.py recover --target . --max-chars 65536 > /tmp/recovery.txt
+          grep -q "Manager ID: context-capsule-project-manager" /tmp/recovery.txt
+
+          git config user.name "project-manager-bootstrap"
+          git config user.email "project-manager-bootstrap@users.noreply.github.com"
+          git add AI_CONTEXT.md AGENTS.md .context
+          git commit -m "Install durable Project Manager state"
+          git push origin HEAD:main
