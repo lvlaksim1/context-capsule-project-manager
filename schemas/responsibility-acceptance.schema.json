@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Capsule responsibility handoff acceptance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "record_id",
+    "task_id",
+    "request_digest",
+    "accepted_by_agent_id",
+    "commitment_owner_agent_id",
+    "accepted_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "context-capsule-responsibility-acceptance"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "record_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "accepted_by_agent_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "commitment_owner_agent_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

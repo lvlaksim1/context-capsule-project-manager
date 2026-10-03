@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Capsule Project Manager state integrity",
+  "type": "object",
+  "required": [
+    "schema",
+    "schema_version",
+    "generation",
+    "algorithm",
+    "coupled_paths",
+    "digests"
+  ],
+  "properties": {
+    "schema": {
+      "const": "context-capsule-manager-state-integrity"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "algorithm": {
+      "const": "git-blob-sha1"
+    },
+    "coupled_paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "digests": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^git-blob-sha1:[0-9a-f]{40}$"
+      }
+    }
+  },
+  "additionalProperties": false
+}

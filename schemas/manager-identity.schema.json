@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Capsule Project Manager identity v1",
+  "type": "object",
+  "required": [
+    "schema", "schema_version", "manager_id", "role", "repository", "continuity",
+    "authority_model", "state_model", "memory_model"
+  ],
+  "properties": {
+    "schema": {"const": "context-capsule-manager-identity"},
+    "schema_version": {"const": 1},
+    "manager_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$"},
+    "role": {"type": "string", "minLength": 1},
+    "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+    "continuity": {"const": "runtime-independent"},
+    "authority_model": {"const": "bounded-by-mandate"},
+    "state_model": {"const": "beliefs-goals-intentions-plans"},
+    "memory_model": {"const": "typed-with-provenance"}
+  },
+  "additionalProperties": true
+}

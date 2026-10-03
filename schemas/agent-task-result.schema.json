@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Capsule external agent task result",
+  "type": "object",
+  "required": ["schema","schema_version","task_id","agent_id","outcome","summary","evidence","actions_performed","uncertainties","terminal_execution","finished_at"],
+  "properties": {
+    "schema": {"const": "context-capsule-agent-task-result"},
+    "schema_version": {"const": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "agent_id": {"type": "string", "minLength": 1},
+    "outcome": {"enum": ["success","partial","blocked","declined","cancelled","invalidated","superseded","escalated"]},
+    "summary": {"type": "string"},
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind","reference","verified","verified_at"],
+        "properties": {
+          "kind": {"type": "string", "minLength": 1},
+          "reference": {"type": "string", "minLength": 1},
+          "verified": {"const": true},
+          "verified_at": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": true
+      }
+    },
+    "actions_performed": {"type": "array", "items": {"type": "string"}},
+    "uncertainties": {"type": "array", "items": {"type": "string"}},
+    "execution": {
+      "type": "object",
+      "properties": {
+        "execution_id": {"type": "string", "minLength": 1},
+        "generation": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "terminal_execution": {
+      "type": "object",
+      "required": ["claim_active","fence_active"],
+      "properties": {
+        "claim_active": {"const": false},
+        "fence_active": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "finished_at": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "success"}}},
+      "then": {"properties": {"evidence": {"minItems": 1}}}
+    }
+  ],
+  "additionalProperties": true
+}

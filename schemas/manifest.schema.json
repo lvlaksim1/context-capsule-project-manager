@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Capsule manifest v4",
+  "type": "object",
+  "required": [
+    "schema",
+    "schema_version",
+    "repository",
+    "authority",
+    "authoritative_branch",
+    "discovery_branch",
+    "branch_mode",
+    "entrypoint",
+    "capsule_metadata",
+    "protocol",
+    "latest_handoff",
+    "project",
+    "manager",
+    "memory",
+    "current",
+    "rules",
+    "decisions",
+    "dialogues",
+    "history",
+    "runtime",
+    "sync_policy"
+  ],
+  "properties": {
+    "schema": {
+      "const": "context-capsule-manifest"
+    },
+    "schema_version": {
+      "const": 4
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "authoritative_branch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "discovery_branch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "branch_mode": {
+      "enum": [
+        "single",
+        "redirect"
+      ]
+    },
+    "entrypoint": {
+      "type": "string"
+    },
+    "capsule_metadata": {
+      "type": "string"
+    },
+    "protocol": {
+      "type": "string"
+    },
+    "latest_handoff": {
+      "type": "string"
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "identity",
+        "goals",
+        "architecture",
+        "constraints"
+      ],
+      "additionalProperties": true
+    },
+    "manager": {
+      "type": "object",
+      "required": [
+        "contract",
+        "protocol",
+        "identity",
+        "mandate",
+        "beliefs",
+        "goals",
+        "intentions",
+        "plans"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "state_integrity": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "required": [
+        "index",
+        "semantic",
+        "procedural",
+        "episodes"
+      ],
+      "properties": {
+        "episodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "current": {
+      "type": "object",
+      "required": [
+        "state",
+        "blockers",
+        "next"
+      ],
+      "additionalProperties": true
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dialogues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": [
+        "checkpoint_is_capsule_state"
+      ],
+      "properties": {
+        "checkpoint_is_capsule_state": {
+          "const": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "sync_policy": {
+      "type": "object",
+      "required": [
+        "semantic_only",
+        "atomic_git_publication",
+        "provenance_required_for_manager_beliefs",
+        "working_views_non_authoritative",
+        "freshness_not_supersession",
+        "owner_directives_must_be_explicit",
+        "commitment_lifecycle_required",
+        "memory_writes_require_provenance",
+        "reconcile_before_high_impact_action",
+        "self_authority_expansion_forbidden",
+        "service_expertise_not_project_authority"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "semantic_only": {
+          "const": true
+        },
+        "atomic_git_publication": {
+          "const": true
+        },
+        "provenance_required_for_manager_beliefs": {
+          "const": true
+        },
+        "working_views_non_authoritative": {
+          "const": true
+        },
+        "freshness_not_supersession": {
+          "const": true
+        },
+        "owner_directives_must_be_explicit": {
+          "const": true
+        },
+        "commitment_lifecycle_required": {
+          "const": true
+        },
+        "memory_writes_require_provenance": {
+          "const": true
+        },
+        "reconcile_before_high_impact_action": {
+          "const": true
+        },
+        "self_authority_expansion_forbidden": {
+          "const": true
+        },
+        "service_expertise_not_project_authority": {
+          "const": true
+        },
+        "manager_state_coherence_required": {
+          "const": true
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "required": [
+        "manager_state_branch",
+        "product_branch"
+      ],
+      "properties": {
+        "manager_state_branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_branch": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

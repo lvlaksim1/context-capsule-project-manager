@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Capsule external agent task envelope",
+  "type": "object",
+  "required": [
+    "schema",
+    "schema_version",
+    "task_id",
+    "issuer",
+    "target_agent_id",
+    "objective",
+    "authority_provenance",
+    "scope",
+    "constraints",
+    "completion_contract"
+  ],
+  "properties": {
+    "schema": {
+      "const": "context-capsule-agent-task"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issuer": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "owner",
+            "project-manager",
+            "service-agent",
+            "supervisor",
+            "other"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "target_agent_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority_provenance": {
+      "type": "object",
+      "required": [
+        "kind",
+        "reference"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "grant": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowed_effects",
+            "forbidden_effects",
+            "scope",
+            "inherited_constraints",
+            "subdelegation"
+          ],
+          "properties": {
+            "allowed_effects": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "forbidden_effects": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "scope": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "inherited_constraints": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "subdelegation": {
+              "enum": [
+                "forbidden",
+                "bounded"
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "relation"
+        ],
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relation": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "completion_contract": {
+      "type": "object",
+      "required": [
+        "required_evidence"
+      ],
+      "properties": {
+        "required_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "minimum"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minimum": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "execution_context": {
+      "$ref": "execution-context.schema.json"
+    },
+    "responsibility": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "commitment_owner_agent_id",
+            "return_to_agent_id"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "bounded_delegation",
+                "explicit_handoff"
+              ]
+            },
+            "commitment_owner_agent_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "return_to_agent_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "semantics_version",
+            "mode",
+            "caller_agent_id",
+            "commitment_owner_agent_id",
+            "proposed_commitment_owner_agent_id",
+            "return_to_agent_id",
+            "transfer_requires_target_acceptance",
+            "authority_chain"
+          ],
+          "properties": {
+            "semantics_version": {
+              "const": 2
+            },
+            "mode": {
+              "enum": [
+                "bounded_delegation",
+                "explicit_handoff"
+              ]
+            },
+            "caller_agent_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "commitment_owner_agent_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "proposed_commitment_owner_agent_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "return_to_agent_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "transfer_requires_target_acceptance": {
+              "type": "boolean"
+            },
+            "authority_chain": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "root",
+                "immediate_grantor_agent_id",
+                "grant_reference",
+                "delegation_depth",
+                "parent_task_id",
+                "allowed_effects",
+                "forbidden_effects",
+                "subdelegation"
+              ],
+              "properties": {
+                "root": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "reference"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reference": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "immediate_grantor_agent_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "grant_reference": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "delegation_depth": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "parent_task_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "allowed_effects": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "forbidden_effects": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "subdelegation": {
+                  "enum": [
+                    "forbidden",
+                    "bounded"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": true
+}

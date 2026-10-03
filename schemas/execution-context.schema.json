@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Capsule execution context",
+  "type": "object",
+  "required": ["schema","schema_version","mode"],
+  "properties": {
+    "schema": {"const": "context-capsule-execution-context"},
+    "schema_version": {"const": 1},
+    "mode": {"enum": ["direct","externally-fenced"]},
+    "execution_id": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 0},
+    "checkpoint_ref": {"type": "string", "minLength": 1},
+    "fence": {
+      "type": "object",
+      "required": ["token","verification_ref","verify_before"],
+      "properties": {
+        "token": {"type": "string", "minLength": 1},
+        "verification_ref": {"type": "string", "minLength": 1},
+        "verify_before": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"enum": ["consequential-write","completion"]},
+          "allOf": [
+            {"contains": {"const": "consequential-write"}},
+            {"contains": {"const": "completion"}}
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "externally-fenced"}}},
+      "then": {"required": ["execution_id","generation","fence"]}
+    }
+  ],
+  "additionalProperties": true
+}

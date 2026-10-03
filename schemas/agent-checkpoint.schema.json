@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Capsule safe agent checkpoint",
+  "type": "object",
+  "required": ["schema","schema_version","task_id","agent_id","current_step","verified_evidence","next_action","updated_at"],
+  "properties": {
+    "schema": {"const": "context-capsule-agent-checkpoint"},
+    "schema_version": {"const": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "agent_id": {"type": "string", "minLength": 1},
+    "execution_id": {"type": ["string","null"]},
+    "generation": {"type": ["integer","null"], "minimum": 0},
+    "current_step": {"type": "string", "minLength": 1},
+    "verified_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind","reference"],
+        "properties": {
+          "kind": {"type": "string", "minLength": 1},
+          "reference": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": true
+      }
+    },
+    "next_action": {"type": "string", "minLength": 1},
+    "updated_at": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}
