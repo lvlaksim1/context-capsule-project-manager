@@ -16,6 +16,7 @@ from installer.model import (
     VERSION,
     build_recovery_pack,
     clean_install_changes,
+    legacy_provenance_changes,
     discovery_redirect_changes,
     readiness_snapshot,
     repair_changes,
@@ -259,6 +260,18 @@ def cmd_repair(args: argparse.Namespace) -> int:
     )
 
 
+
+def cmd_normalize_legacy_provenance(args: argparse.Namespace) -> int:
+    target = target_root(args.target)
+    ensure_branch(target, args.branch)
+    files = load_snapshot(target)
+    return _apply_planned(
+        target,
+        "legacy provenance normalization",
+        lambda: legacy_provenance_changes(files),
+    )
+
+
 def cmd_discovery(args: argparse.Namespace) -> int:
     target = target_root(args.target)
     ensure_branch(target, args.discovery_branch)
@@ -392,6 +405,15 @@ def build_parser() -> argparse.ArgumentParser:
     upgrade.add_argument("--core-commit", help="deprecated alias for --project-manager-commit")
     upgrade.add_argument("--product-branch", help="product baseline branch; inferred from existing topology when omitted")
     upgrade.set_defaults(func=cmd_upgrade)
+
+
+    normalize = sub.add_parser(
+        "normalize-legacy-provenance",
+        help="attribute legacy v2 durable entries conservatively without changing their statements",
+    )
+    normalize.add_argument("--target", required=True)
+    normalize.add_argument("--branch", required=True)
+    normalize.set_defaults(func=cmd_normalize_legacy_provenance)
 
     discovery = sub.add_parser("discovery", help="prepare a discovery-only branch redirect")
     discovery.add_argument("--target", required=True)
