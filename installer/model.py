@@ -694,37 +694,59 @@ def _is_substantive(text: str | None) -> bool:
     return not any(pattern in lower for pattern in PLACEHOLDER_PATTERNS)
 
 
-def _durable_entries(text: str | None) -> list[str]:
+def _durable_entry_spans(text: str | None) -> tuple[list[str], list[tuple[int, int, str]]]:
     if text is None:
-        return []
-    entries: list[str] = []
-    current: list[str] = []
-    bullet_entry = False
+        return [], []
+    lines = text.splitlines()
 
-    def finish() -> None:
-        nonlocal current, bullet_entry
-        if current:
-            entries.append(" ".join(current).strip())
-        current = []
-        bullet_entry = False
+    section_starts = [
+        index
+        for index, raw in enumerate(lines)
+        if raw.strip().startswith("## ")
+    ]
+    if section_starts:
+        spans = []
+        for pos, start in enumerate(section_starts):
+            end = section_starts[pos + 1] if pos + 1 < len(section_starts) else len(lines)
+            spans.append((start, end, "section"))
+        return lines, spans
 
-    for raw in text.splitlines():
+    top_level_bullets = [
+        index
+        for index, raw in enumerate(lines)
+        if raw == raw.lstrip() and _PROVENANCE_ENTRY_START.match(raw.strip())
+    ]
+    if top_level_bullets:
+        spans = []
+        for pos, start in enumerate(top_level_bullets):
+            end = top_level_bullets[pos + 1] if pos + 1 < len(top_level_bullets) else len(lines)
+            spans.append((start, end, "bullet"))
+        return lines, spans
+
+    spans: list[tuple[int, int, str]] = []
+    start: int | None = None
+    for index, raw in enumerate(lines + [""]):
         stripped = raw.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith("<!--"):
-            if not stripped and current and not bullet_entry:
-                finish()
-            continue
-        if _PROVENANCE_ENTRY_START.match(stripped):
-            finish()
-            current = [stripped]
-            bullet_entry = True
-            continue
-        if current:
-            current.append(stripped)
-        else:
-            current = [stripped]
-            bullet_entry = False
-    finish()
+        is_content = bool(stripped) and not stripped.startswith("#") and not stripped.startswith("<!--")
+        if is_content and start is None:
+            start = index
+        elif not is_content and start is not None:
+            spans.append((start, index, "paragraph"))
+            start = None
+    return lines, spans
+
+
+def _durable_entries(text: str | None) -> list[str]:
+    lines, spans = _durable_entry_spans(text)
+    entries: list[str] = []
+    for start, end, _kind in spans:
+        entry = " ".join(
+            raw.strip()
+            for raw in lines[start:end]
+            if raw.strip() and not raw.strip().startswith("<!--")
+        ).strip()
+        if entry:
+            entries.append(entry)
     return entries
 
 
@@ -744,6 +766,112 @@ def _entry_provenance_errors(text: str | None, label: str) -> list[str]:
                 f"{label} entry {index} missing provenance field(s): {', '.join(missing)}"
             )
     return errors
+
+
+def _normalize_legacy_provenance_text(text: str) -> tuple[str, int]:
+    if not _is_substantive(text):
+        return text, 0
+
+    lines, spans = _durable_entry_spans(text)
+    changed = 0
+    for start, end, kind in reversed(spans):
+        entry = " ".join(raw.strip() for raw in lines[start:end] if raw.strip()).lower()
+        missing_source = "source:" not in entry
+        missing_authority = "authority:" not in entry
+        if not (missing_source or missing_authority):
+            continue
+
+        additions: list[str] = []
+        if missing_source:
+            additions.append("source: legacy-v2-state")
+        if missing_authority:
+            additions.append("authority: legacy-unverified")
+
+        if kind == "section":
+            insert = []
+            if end > start and lines[end - 1].strip():
+                insert.append("")
+            insert.extend(f"- {item}" for item in additions)
+            lines[end:end] = insert
+        elif kind == "bullet":
+            lines[end:end] = [f"  - {item}" for item in additions]
+        else:
+            index = end - 1
+            while index >= start and not lines[index].strip():
+                index -= 1
+            if index < start:
+                continue
+            lines[index] = lines[index].rstrip() + " " + "; ".join(additions)
+        changed += 1
+
+    normalized = "\n".join(lines)
+    if text.endswith("\n"):
+        normalized += "\n"
+
+    residual = _entry_provenance_errors(normalized, "legacy provenance")
+    if residual:
+        raise CapsuleModelError(
+            "legacy provenance normalization could not safely attribute every durable entry: "
+            + "; ".join(residual)
+        )
+    return normalized, changed
+
+
+def legacy_provenance_changes(files: dict[str, str]) -> dict[str, str]:
+    manifest = parse_json_text(files, ".context/manifest.json") or {}
+    meta = parse_json_text(files, ".context/capsule.json") or {}
+    if meta.get("version") != VERSION:
+        raise CapsuleModelError(
+            f"legacy provenance normalization requires Project Manager {VERSION}; "
+            f"installed version is {meta.get('version')!r}"
+        )
+
+    sync = manifest.get("sync_policy")
+    coherence_required = isinstance(sync, dict) and sync.get("manager_state_coherence_required") is True
+    if coherence_required:
+        integrity_errors = _manager_state_integrity_errors(files, manifest)
+        if integrity_errors:
+            raise CapsuleModelError(
+                "legacy provenance normalization refuses incoherent manager state: "
+                + "; ".join(integrity_errors)
+            )
+
+    manager = manifest.get("manager") if isinstance(manifest.get("manager"), dict) else {}
+    memory = manifest.get("memory") if isinstance(manifest.get("memory"), dict) else {}
+    paths = [
+        manager.get("beliefs"),
+        memory.get("semantic"),
+        memory.get("procedural"),
+    ]
+
+    provisional = dict(files)
+    changed_paths: set[str] = set()
+    for path in paths:
+        if not isinstance(path, str) or path not in provisional:
+            continue
+        normalized, changed = _normalize_legacy_provenance_text(provisional[path])
+        if changed:
+            provisional[path] = normalized
+            changed_paths.add(path)
+
+    coupled = set(manager_state_coupled_paths(manifest))
+    if changed_paths & coupled:
+        marker_path = manager.get("state_integrity")
+        if not isinstance(marker_path, str) or not marker_path:
+            raise CapsuleModelError(
+                "legacy provenance normalization changed coupled manager state without a state-integrity marker"
+            )
+        previous = parse_json_text(files, marker_path)
+        provisional[marker_path] = canonical_json(
+            build_manager_state_integrity(provisional, manifest, existing=previous)
+        )
+        changed_paths.add(marker_path)
+
+    return {
+        path: provisional[path]
+        for path in changed_paths
+        if files.get(path) != provisional[path]
+    }
 
 
 def _core_binding_errors(

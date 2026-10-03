@@ -45,3 +45,21 @@ python installer/pmctl.py validate --target /repo
 python installer/pmctl.py ready --target /repo
 python installer/pmctl.py recover --target /repo
 ```
+
+
+## Legacy v2 provenance normalization
+
+Older v2 managers may contain durable beliefs or memory written before per-entry provenance became
+mandatory. After `repair`, run:
+
+```bash
+python installer/pmctl.py normalize-legacy-provenance --target /repo --branch main
+```
+
+The command does not reinterpret the statement. It only adds conservative metadata where missing:
+`source: legacy-v2-state` and `authority: legacy-unverified`.
+
+Structured entries are parsed logically: a `##` memory section is one durable entry, and indented
+`source`/`authority` bullets belong to their parent belief rather than becoming separate facts.
+If coupled manager state changes, the state-integrity seal advances only after the previous
+generation has been verified coherent.
