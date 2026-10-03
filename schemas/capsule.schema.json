@@ -1,17 +1,112 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Context Capsule metadata v2 development",
+  "title": "Context Capsule Project Manager metadata v2",
   "type": "object",
-  "required": ["schema", "version", "source", "core_commit", "installed_at", "repository", "update_policy"],
+  "required": [
+    "schema",
+    "version",
+    "source",
+    "installed_at",
+    "repository",
+    "update_policy"
+  ],
   "properties": {
-    "schema": {"const": "context-capsule"},
-    "version": {"const": "2.0.0-dev"},
-    "source": {"const": "lvlaksim1/context-capsule"},
-    "core_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "installed_at": {"type": "string"},
-    "repository": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
-    "update_policy": {"const": "manual"},
-    "adopted_from": {"type": "string"}
+    "schema": {
+      "const": "context-capsule"
+    },
+    "version": {
+      "const": "2.0.0-dev"
+    },
+    "source": {
+      "enum": [
+        "lvlaksim1/context-capsule-project-manager",
+        "lvlaksim1/context-capsule"
+      ]
+    },
+    "core_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "deprecated": true
+    },
+    "project_manager_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "context_capsule_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "context_capsule",
+        "project_manager"
+      ],
+      "properties": {
+        "context_capsule": {
+          "type": "object",
+          "required": [
+            "repository",
+            "commit"
+          ],
+          "properties": {
+            "repository": {
+              "const": "lvlaksim1/context-capsule"
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "project_manager": {
+          "type": "object",
+          "required": [
+            "repository",
+            "commit"
+          ],
+          "properties": {
+            "repository": {
+              "const": "lvlaksim1/context-capsule-project-manager"
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "installed_at": {
+      "type": "string"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "update_policy": {
+      "const": "manual"
+    },
+    "adopted_from": {
+      "type": "string"
+    }
   },
+  "anyOf": [
+    {
+      "required": [
+        "provenance",
+        "project_manager_commit",
+        "context_capsule_commit"
+      ]
+    },
+    {
+      "required": [
+        "core_commit"
+      ]
+    }
+  ],
   "additionalProperties": true
 }

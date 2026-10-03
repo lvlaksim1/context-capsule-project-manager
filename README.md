@@ -28,18 +28,19 @@ The old branch is migration history. New PM product development belongs here.
 
 ## Compatibility
 
-The first split preserves the existing v2 on-disk contract, including the legacy
-`core_commit` provenance coordinate. This avoids silently rewriting installed managers.
+The repository split now has an explicit provenance model. New or repaired v2 installations
+record separate immutable coordinates for Context Capsule Core and Project Manager.
 
-A later explicit schema migration will separate Context Capsule Core provenance from
-Project Manager product provenance.
+The historical `core_commit` field remains as a deprecated compatibility alias for the
+Project Manager source commit so existing v2 consumers are not invalidated. Legacy metadata
+is accepted and is upgraded in place by an explicit lifecycle operation.
 
 ## CLI
 
 ```bash
-python installer/pmctl.py install --target /repo --repository owner/name --branch main --core-commit <pm-source-commit>
-python installer/pmctl.py upgrade --target /repo --repository owner/name --branch main --core-commit <pm-source-commit>
-python installer/pmctl.py repair --target /repo --repository owner/name --branch main --core-commit <pm-source-commit>
+python installer/pmctl.py install --target /repo --repository owner/name --branch main --project-manager-commit <pm-source-commit> --context-capsule-commit <core-commit>
+python installer/pmctl.py upgrade --target /repo --repository owner/name --branch main --project-manager-commit <pm-source-commit> --context-capsule-commit <core-commit>
+python installer/pmctl.py repair --target /repo --repository owner/name --branch main --project-manager-commit <pm-source-commit> --context-capsule-commit <core-commit>
 python installer/pmctl.py validate --target /repo
 python installer/pmctl.py ready --target /repo
 python installer/pmctl.py recover --target /repo

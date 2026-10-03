@@ -25,12 +25,12 @@ from installer.model import (
 from installer.safety import CapsuleSafetyError, confined_local_path, validate_core_commit
 from installer.runtime_guard import (
     LifecycleGuardError,
-    load_core_reference,
+    load_project_manager_reference,
     manager_checkout_status,
-    snapshot_core_commit,
+    snapshot_project_manager_commit,
 )
-CORE_ROOT = Path(__file__).resolve().parents[1]
-TEMPLATES = CORE_ROOT / "templates"
+PROJECT_MANAGER_ROOT = Path(__file__).resolve().parents[1]
+TEMPLATES = PROJECT_MANAGER_ROOT / "templates"
 
 
 def target_root(value: str) -> Path:
@@ -127,29 +127,39 @@ def apply_local_changes(target: Path, changes: dict[str, str | None]) -> None:
         os.replace(tmp, path)
 
 
-def infer_core_commit(explicit: str | None) -> str:
-    if explicit:
-        return validate_core_commit(explicit)
+def infer_project_manager_commit(explicit: str | None, legacy_core_commit: str | None = None) -> str:
+    if explicit and legacy_core_commit and explicit != legacy_core_commit:
+        raise SystemExit("--project-manager-commit and deprecated --core-commit disagree")
+    candidate = explicit or legacy_core_commit
+    if candidate:
+        return validate_core_commit(candidate)
     try:
         sha = subprocess.run(
-            ["git", "-C", str(CORE_ROOT), "rev-parse", "HEAD"],
+            ["git", "-C", str(PROJECT_MANAGER_ROOT), "rev-parse", "HEAD"],
             text=True,
             capture_output=True,
             check=True,
         ).stdout.strip()
         return validate_core_commit(sha)
     except Exception as exc:
-        raise SystemExit("--core-commit is required when Core is not running from a Git checkout") from exc
+        raise SystemExit(
+            "--project-manager-commit is required when Project Manager is not running from a Git checkout"
+        ) from exc
 
 
-def infer_bound_core_commit(explicit: str | None) -> str:
-    core_commit = infer_core_commit(explicit)
+def infer_bound_project_manager_commit(explicit: str | None, legacy_core_commit: str | None = None) -> str:
+    project_manager_commit = infer_project_manager_commit(explicit, legacy_core_commit)
     try:
-        load_core_reference(CORE_ROOT, core_commit)
+        load_project_manager_reference(PROJECT_MANAGER_ROOT, project_manager_commit)
     except LifecycleGuardError as exc:
         raise SystemExit(str(exc)) from exc
-    return core_commit
+    return project_manager_commit
 
+
+def infer_context_capsule_commit(explicit: str | None) -> str:
+    from installer.model import DEFAULT_CONTEXT_CAPSULE_COMMIT
+
+    return validate_core_commit(explicit or DEFAULT_CONTEXT_CAPSULE_COMMIT)
 
 def actual_branch(target: Path) -> str | None:
     try:
@@ -184,7 +194,10 @@ def cmd_install(args: argparse.Namespace) -> int:
     target = target_root(args.target)
     ensure_branch(target, args.branch)
     files = load_snapshot(target)
-    core_commit = infer_bound_core_commit(args.core_commit)
+    project_manager_commit = infer_bound_project_manager_commit(
+        args.project_manager_commit, args.core_commit
+    )
+    context_capsule_commit = infer_context_capsule_commit(args.context_capsule_commit)
     return _apply_planned(
         target,
         "install",
@@ -193,7 +206,8 @@ def cmd_install(args: argparse.Namespace) -> int:
             TEMPLATES,
             args.repository,
             args.branch,
-            core_commit,
+            project_manager_commit,
+            context_capsule_commit=context_capsule_commit,
             discovery_branch=args.discovery_branch,
             product_branch=args.product_branch,
         ),
@@ -204,7 +218,10 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
     target = target_root(args.target)
     ensure_branch(target, args.branch)
     files = load_snapshot(target)
-    core_commit = infer_bound_core_commit(args.core_commit)
+    project_manager_commit = infer_bound_project_manager_commit(
+        args.project_manager_commit, args.core_commit
+    )
+    context_capsule_commit = infer_context_capsule_commit(args.context_capsule_commit)
     return _apply_planned(
         target,
         "upgrade",
@@ -213,7 +230,8 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
             TEMPLATES,
             repository=args.repository,
             branch=args.branch,
-            core_commit=core_commit,
+            core_commit=project_manager_commit,
+            context_capsule_commit=context_capsule_commit,
             product_branch=args.product_branch,
         ),
     )
@@ -223,7 +241,10 @@ def cmd_repair(args: argparse.Namespace) -> int:
     target = target_root(args.target)
     ensure_branch(target, args.branch)
     files = load_snapshot(target)
-    core_commit = infer_bound_core_commit(args.core_commit)
+    project_manager_commit = infer_bound_project_manager_commit(
+        args.project_manager_commit, args.core_commit
+    )
+    context_capsule_commit = infer_context_capsule_commit(args.context_capsule_commit)
     return _apply_planned(
         target,
         "repair",
@@ -232,7 +253,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
             TEMPLATES,
             repository=args.repository,
             branch=args.branch,
-            core_commit=core_commit,
+            core_commit=project_manager_commit,
+            context_capsule_commit=context_capsule_commit,
         ),
     )
 
@@ -256,18 +278,20 @@ def cmd_discovery(args: argparse.Namespace) -> int:
     return 0
 
 
-def _bound_core_reference(files: dict[str, str]) -> dict[str, str]:
-    return load_core_reference(CORE_ROOT, snapshot_core_commit(files))
+def _bound_project_manager_reference(files: dict[str, str]) -> dict[str, str]:
+    return load_project_manager_reference(
+        PROJECT_MANAGER_ROOT, snapshot_project_manager_commit(files)
+    )
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
     target = target_root(args.target)
     try:
         files = load_snapshot(target)
-        core_reference = _bound_core_reference(files)
+        project_manager_reference = _bound_project_manager_reference(files)
         errors = validate_snapshot(
             files,
-            core_reference=core_reference,
+            core_reference=project_manager_reference,
             require_core_binding=True,
         )
     except (CapsuleModelError, CapsuleSafetyError, LifecycleGuardError, SystemExit) as exc:
@@ -278,7 +302,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("Context Capsule validation: VALID (CORE PROVENANCE BOUND)")
+    print("Context Capsule validation: VALID (PROJECT MANAGER PROVENANCE BOUND)")
     return 0
 
 
@@ -292,10 +316,10 @@ def cmd_ready(args: argparse.Namespace) -> int:
             expected_ref=args.expected_manager_ref,
             non_authoritative=args.non_authoritative,
         )
-        core_reference = _bound_core_reference(files)
+        project_manager_reference = _bound_project_manager_reference(files)
         ready, reasons = readiness_snapshot(
             files,
-            core_reference=core_reference,
+            core_reference=project_manager_reference,
             require_core_binding=True,
         )
     except (CapsuleModelError, CapsuleSafetyError, LifecycleGuardError, SystemExit) as exc:
@@ -329,11 +353,11 @@ def cmd_recover(args: argparse.Namespace) -> int:
             expected_ref=args.expected_manager_ref,
             non_authoritative=args.non_authoritative,
         )
-        core_reference = _bound_core_reference(files)
+        project_manager_reference = _bound_project_manager_reference(files)
         pack = build_recovery_pack(
             files,
             max_chars=args.max_chars,
-            core_reference=core_reference,
+            core_reference=project_manager_reference,
             require_core_binding=True,
             authoritative=authoritative,
         )
@@ -352,7 +376,9 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--target", required=True)
     install.add_argument("--repository", required=True)
     install.add_argument("--branch", default="main")
-    install.add_argument("--core-commit")
+    install.add_argument("--project-manager-commit")
+    install.add_argument("--context-capsule-commit")
+    install.add_argument("--core-commit", help="deprecated alias for --project-manager-commit")
     install.add_argument("--discovery-branch")
     install.add_argument("--product-branch", help="product baseline branch; defaults to manager-state authority (or discovery branch in redirect mode)")
     install.set_defaults(func=cmd_install)
@@ -361,7 +387,9 @@ def build_parser() -> argparse.ArgumentParser:
     upgrade.add_argument("--target", required=True)
     upgrade.add_argument("--repository", required=True)
     upgrade.add_argument("--branch", required=True)
-    upgrade.add_argument("--core-commit")
+    upgrade.add_argument("--project-manager-commit")
+    upgrade.add_argument("--context-capsule-commit")
+    upgrade.add_argument("--core-commit", help="deprecated alias for --project-manager-commit")
     upgrade.add_argument("--product-branch", help="product baseline branch; inferred from existing topology when omitted")
     upgrade.set_defaults(func=cmd_upgrade)
 
@@ -375,7 +403,9 @@ def build_parser() -> argparse.ArgumentParser:
     repair.add_argument("--target", required=True)
     repair.add_argument("--repository", required=True)
     repair.add_argument("--branch", required=True)
-    repair.add_argument("--core-commit")
+    repair.add_argument("--project-manager-commit")
+    repair.add_argument("--context-capsule-commit")
+    repair.add_argument("--core-commit", help="deprecated alias for --project-manager-commit")
     repair.set_defaults(func=cmd_repair)
 
     validate = sub.add_parser("validate", help="check structural validity")
