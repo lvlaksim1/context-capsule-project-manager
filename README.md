@@ -47,6 +47,13 @@ python installer/pmctl.py recover --target /repo
 ```
 
 
+## Recovery budget
+
+The default reinstantiation-pack budget is 131072 characters. Project Manager Contract and
+Protocol are mandatory recovery state, and the previous 65536-character default became too small
+for valid, substantive projects as those governing contracts grew. Callers may still pass a
+smaller or larger explicit `--max-chars`; mandatory state always fails closed if it cannot fit.
+
 ## Legacy v2 provenance normalization
 
 Older v2 managers may contain durable beliefs or memory written before per-entry provenance became

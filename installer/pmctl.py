@@ -446,7 +446,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     recover = sub.add_parser("recover", help="emit a deterministic Project Manager reinstantiation pack")
     recover.add_argument("--target", required=True)
-    recover.add_argument("--max-chars", type=int, default=65536)
+    recover.add_argument("--max-chars", type=int, default=131072)
     recover.add_argument("--expected-manager-ref", help="optional commit/ref pin for deterministic authority verification")
     recover.add_argument(
         "--non-authoritative",
