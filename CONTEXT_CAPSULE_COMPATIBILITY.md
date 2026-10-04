@@ -2,6 +2,24 @@
 
 Project Manager v2 is a separate product built on the Context Capsule durable-context contract.
 
+## Version coordinates
+
+The products are versioned independently:
+
+- Context Capsule Core version: `1.3.1`;
+- Project Manager version: `2.0.0-dev`.
+
+New and repaired installations record canonical component objects
+`context_capsule.version` and `project_manager.version`, plus transitional top-level
+`context_capsule_version` and `project_manager_version` mirrors.
+
+The historical top-level `version` field is deprecated. In PM v2 metadata its value
+`2.0.0-dev` means **Project Manager version**, never Context Capsule Core version.
+
+The manifest follows the same rule: use `context_capsule_version` and
+`project_manager_version`. Historical `context_version` is deprecated because it carried
+the PM version despite its ambiguous name.
+
 ## Provenance coordinates
 
 New or explicitly repaired v2 installations record both immutable product coordinates:
