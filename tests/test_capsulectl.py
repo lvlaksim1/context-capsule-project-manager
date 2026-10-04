@@ -9,8 +9,10 @@ from pathlib import Path
 
 from installer.github_atomic import ConcurrentBranchUpdate, HeadState, MutationPlan, publish_single_commit
 from installer.model import (
+    CONTEXT_CAPSULE_VERSION,
     CORE_GOVERNING_PATHS,
     CapsuleModelError,
+    PROJECT_MANAGER_VERSION,
     VERSION,
     build_manager_state_integrity,
     build_recovery_pack,
@@ -131,6 +133,16 @@ class ContextCapsuleV2Tests(unittest.TestCase):
             metadata["context_capsule_commit"],
             "2ef41a5ed57ae514cc5980065560d7e55d5e4b9a",
         )
+        self.assertEqual(metadata["version"], PROJECT_MANAGER_VERSION)
+        self.assertEqual(metadata["project_manager_version"], PROJECT_MANAGER_VERSION)
+        self.assertEqual(metadata["context_capsule_version"], CONTEXT_CAPSULE_VERSION)
+        self.assertEqual(metadata["project_manager"]["version"], PROJECT_MANAGER_VERSION)
+        self.assertEqual(metadata["project_manager"]["commit"], CORE_SHA)
+        self.assertEqual(metadata["context_capsule"]["version"], CONTEXT_CAPSULE_VERSION)
+        self.assertEqual(
+            metadata["context_capsule"]["commit"],
+            "2ef41a5ed57ae514cc5980065560d7e55d5e4b9a",
+        )
         self.assertEqual(
             metadata["provenance"]["project_manager"]["repository"],
             "lvlaksim1/context-capsule-project-manager",
@@ -143,6 +155,9 @@ class ContextCapsuleV2Tests(unittest.TestCase):
         manifest = json.loads(installed[".context/manifest.json"])
         self.assertEqual(manifest["authority"]["manager_state_branch"], "main")
         self.assertEqual(manifest["authority"]["product_branch"], "main")
+        self.assertEqual(manifest["context_capsule_version"], CONTEXT_CAPSULE_VERSION)
+        self.assertEqual(manifest["project_manager_version"], PROJECT_MANAGER_VERSION)
+        self.assertEqual(manifest["context_version"], PROJECT_MANAGER_VERSION)
 
 
     def test_legacy_v2_core_commit_is_accepted_and_repair_enriches_provenance(self):
@@ -151,6 +166,10 @@ class ContextCapsuleV2Tests(unittest.TestCase):
         ))
         metadata = json.loads(installed[".context/capsule.json"])
         legacy = dict(metadata)
+        legacy.pop("context_capsule", None)
+        legacy.pop("project_manager", None)
+        legacy.pop("context_capsule_version", None)
+        legacy.pop("project_manager_version", None)
         legacy.pop("provenance", None)
         legacy.pop("project_manager_commit", None)
         legacy.pop("context_capsule_commit", None)
@@ -172,6 +191,10 @@ class ContextCapsuleV2Tests(unittest.TestCase):
         self.assertEqual(migrated["core_commit"], CORE_SHA)
         self.assertEqual(migrated["project_manager_commit"], CORE_SHA)
         self.assertEqual(migrated["context_capsule_commit"], "b" * 40)
+        self.assertEqual(migrated["project_manager"]["version"], PROJECT_MANAGER_VERSION)
+        self.assertEqual(migrated["context_capsule"]["version"], CONTEXT_CAPSULE_VERSION)
+        self.assertEqual(migrated["project_manager"]["commit"], CORE_SHA)
+        self.assertEqual(migrated["context_capsule"]["commit"], "b" * 40)
         self.assertEqual(
             migrated["provenance"]["context_capsule"]["commit"], "b" * 40
         )
@@ -638,6 +661,8 @@ class ContextCapsuleV2Tests(unittest.TestCase):
         meta = json.loads(upgraded[".context/capsule.json"])
         manifest = json.loads(upgraded[".context/manifest.json"])
         self.assertEqual(meta["version"], VERSION)
+        self.assertEqual(meta["project_manager"]["version"], PROJECT_MANAGER_VERSION)
+        self.assertEqual(meta["context_capsule"]["version"], CONTEXT_CAPSULE_VERSION)
         self.assertEqual(meta["custom_meta"], "keep")
         self.assertTrue(manifest["custom_extension"]["keep"])
         self.assertEqual(manifest["schema_version"], 4)
