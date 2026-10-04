@@ -26,6 +26,35 @@ Split from `lvlaksim1/context-capsule:v2-manager-runtime` at immutable source co
 
 The old branch is migration history. New PM product development belongs here.
 
+## Version semantics
+
+Context Capsule Core and Project Manager are independently versioned products:
+
+- Context Capsule Core: **v1.3.1**;
+- Project Manager: **v2.0.0-dev**.
+
+New and repaired PM installations record both explicitly in `.context/capsule.json`:
+
+```json
+{
+  "context_capsule": {
+    "version": "1.3.1",
+    "repository": "lvlaksim1/context-capsule",
+    "commit": "<core-sha>"
+  },
+  "project_manager": {
+    "version": "2.0.0-dev",
+    "repository": "lvlaksim1/context-capsule-project-manager",
+    "commit": "<pm-sha>"
+  }
+}
+```
+
+The historical top-level `version: "2.0.0-dev"` is retained only as a deprecated
+compatibility alias for the Project Manager version. It must not be read as a Context Capsule
+Core version. The manifest likewise exposes explicit `context_capsule_version` and
+`project_manager_version`; its historical `context_version` field remains deprecated.
+
 ## Compatibility
 
 The repository split now has an explicit provenance model. New or repaired v2 installations

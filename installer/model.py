@@ -10,7 +10,9 @@ from typing import Iterable
 
 from .safety import CapsuleSafetyError, normalize_repo_path, render_managed_block, validate_core_commit
 
-VERSION = "2.0.0-dev"
+CONTEXT_CAPSULE_VERSION = "1.3.1"
+PROJECT_MANAGER_VERSION = "2.0.0-dev"
+VERSION = PROJECT_MANAGER_VERSION  # deprecated compatibility alias
 SOURCE_REPOSITORY = "lvlaksim1/context-capsule-project-manager"
 CONTEXT_CAPSULE_REPOSITORY = "lvlaksim1/context-capsule"
 DEFAULT_CONTEXT_CAPSULE_COMMIT = "2ef41a5ed57ae514cc5980065560d7e55d5e4b9a"
@@ -155,6 +157,17 @@ def discovery_redirect_changes(
     return changes
 
 
+def installed_project_manager_version(meta: dict) -> str | None:
+    component = meta.get("project_manager")
+    if isinstance(component, dict) and isinstance(component.get("version"), str):
+        return component["version"]
+    explicit = meta.get("project_manager_version")
+    if isinstance(explicit, str):
+        return explicit
+    legacy = meta.get("version")
+    return legacy if isinstance(legacy, str) else None
+
+
 def build_capsule_metadata(
     repository: str,
     core_commit: str,
@@ -174,9 +187,23 @@ def build_capsule_metadata(
     result.update(
         {
             "schema": "context-capsule",
-            "version": VERSION,
+            # Deprecated compatibility alias: this historically represented the
+            # Project Manager runtime/format version, not Context Capsule Core.
+            "version": PROJECT_MANAGER_VERSION,
             "source": SOURCE_REPOSITORY,
-            # Deprecated compatibility alias retained for existing v2 consumers.
+            "context_capsule_version": CONTEXT_CAPSULE_VERSION,
+            "project_manager_version": PROJECT_MANAGER_VERSION,
+            "context_capsule": {
+                "version": CONTEXT_CAPSULE_VERSION,
+                "repository": CONTEXT_CAPSULE_REPOSITORY,
+                "commit": context_capsule_commit,
+            },
+            "project_manager": {
+                "version": PROJECT_MANAGER_VERSION,
+                "repository": SOURCE_REPOSITORY,
+                "commit": project_manager_commit,
+            },
+            # Deprecated compatibility aliases retained for existing v2 consumers.
             "core_commit": project_manager_commit,
             "project_manager_commit": project_manager_commit,
             "context_capsule_commit": context_capsule_commit,
@@ -417,7 +444,11 @@ def build_manifest(
             "runtime": runtime_old,
             "sync_policy": sync_old,
             "updated_at": dt.date.today().isoformat(),
-            "context_version": VERSION,
+            # Deprecated ambiguous compatibility field. It historically carried
+            # the Project Manager version, so preserve that value for old readers.
+            "context_version": PROJECT_MANAGER_VERSION,
+            "context_capsule_version": CONTEXT_CAPSULE_VERSION,
+            "project_manager_version": PROJECT_MANAGER_VERSION,
         }
     )
     if not manifest["rules"] and ".context/rules/project-rules.md" in files:
@@ -514,8 +545,38 @@ def validate_snapshot(
     else:
         if meta.get("schema") != "context-capsule":
             errors.append("capsule.json: invalid schema")
-        if meta.get("version") != VERSION:
-            errors.append(f"capsule.json: version must be {VERSION}; use explicit upgrade for older capsules")
+        if meta.get("version") != PROJECT_MANAGER_VERSION:
+            errors.append(
+                f"capsule.json: deprecated version alias must be {PROJECT_MANAGER_VERSION}; "
+                "use explicit upgrade for older capsules"
+            )
+
+        context_capsule = meta.get("context_capsule")
+        project_manager = meta.get("project_manager")
+        if context_capsule is not None or project_manager is not None:
+            if not isinstance(context_capsule, dict):
+                errors.append("capsule.json: context_capsule component metadata is invalid")
+            if not isinstance(project_manager, dict):
+                errors.append("capsule.json: project_manager component metadata is invalid")
+            if isinstance(context_capsule, dict):
+                if context_capsule.get("version") != CONTEXT_CAPSULE_VERSION:
+                    errors.append(
+                        f"capsule.json: Context Capsule Core version must be {CONTEXT_CAPSULE_VERSION}"
+                    )
+                if context_capsule.get("repository") != CONTEXT_CAPSULE_REPOSITORY:
+                    errors.append("capsule.json: context_capsule.repository is invalid")
+            if isinstance(project_manager, dict):
+                if project_manager.get("version") != PROJECT_MANAGER_VERSION:
+                    errors.append(
+                        f"capsule.json: Project Manager version must be {PROJECT_MANAGER_VERSION}"
+                    )
+                if project_manager.get("repository") != SOURCE_REPOSITORY:
+                    errors.append("capsule.json: project_manager.repository is invalid")
+            if meta.get("context_capsule_version") not in (None, CONTEXT_CAPSULE_VERSION):
+                errors.append("capsule.json: context_capsule_version disagrees with Context Capsule component")
+            if meta.get("project_manager_version") not in (None, PROJECT_MANAGER_VERSION):
+                errors.append("capsule.json: project_manager_version disagrees with Project Manager component")
+
         provenance = meta.get("provenance")
         if isinstance(provenance, dict):
             pm = provenance.get("project_manager")
@@ -531,6 +592,10 @@ def validate_snapshot(
                     errors.append("capsule.json: project_manager_commit disagrees with provenance")
                 if meta.get("context_capsule_commit") not in (None, cc_commit):
                     errors.append("capsule.json: context_capsule_commit disagrees with provenance")
+                if isinstance(project_manager, dict) and project_manager.get("commit") != pm_commit:
+                    errors.append("capsule.json: project_manager.commit disagrees with provenance")
+                if isinstance(context_capsule, dict) and context_capsule.get("commit") != cc_commit:
+                    errors.append("capsule.json: context_capsule.commit disagrees with provenance")
                 if meta.get("core_commit") not in (None, pm_commit):
                     errors.append("capsule.json: deprecated core_commit alias disagrees with Project Manager provenance")
             except CapsuleSafetyError as exc:
@@ -823,10 +888,11 @@ def _normalize_legacy_provenance_text(text: str) -> tuple[str, int]:
 def legacy_provenance_changes(files: dict[str, str]) -> dict[str, str]:
     manifest = parse_json_text(files, ".context/manifest.json") or {}
     meta = parse_json_text(files, ".context/capsule.json") or {}
-    if meta.get("version") != VERSION:
+    installed_version = installed_project_manager_version(meta)
+    if installed_version != PROJECT_MANAGER_VERSION:
         raise CapsuleModelError(
-            f"legacy provenance normalization requires Project Manager {VERSION}; "
-            f"installed version is {meta.get('version')!r}"
+            f"legacy provenance normalization requires Project Manager {PROJECT_MANAGER_VERSION}; "
+            f"installed version is {installed_version!r}"
         )
 
     sync = manifest.get("sync_policy")
@@ -1335,9 +1401,11 @@ def repair_changes(
 ) -> dict[str, str]:
     existing_manifest = parse_json_text(files, ".context/manifest.json") or {}
     existing_meta = parse_json_text(files, ".context/capsule.json") or {}
-    if existing_meta.get("version") != VERSION:
+    installed_pm_version = installed_project_manager_version(existing_meta)
+    if installed_pm_version != PROJECT_MANAGER_VERSION:
         raise CapsuleModelError(
-            f"repair never performs a major-version upgrade; installed version is {existing_meta.get('version')!r}, use upgrade"
+            f"repair never performs a major-version upgrade; installed Project Manager version is "
+            f"{installed_pm_version!r}, use upgrade"
         )
     authoritative_branch = existing_manifest.get("authoritative_branch")
     if isinstance(authoritative_branch, str) and authoritative_branch and authoritative_branch != branch:
