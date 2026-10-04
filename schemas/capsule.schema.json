@@ -15,7 +15,9 @@
       "const": "context-capsule"
     },
     "version": {
-      "const": "2.0.0-dev"
+      "const": "2.0.0-dev",
+      "deprecated": true,
+      "description": "Deprecated compatibility alias for Project Manager version."
     },
     "source": {
       "enum": [
@@ -92,9 +94,68 @@
     },
     "adopted_from": {
       "type": "string"
+    },
+    "context_capsule_version": {
+      "const": "1.3.1"
+    },
+    "project_manager_version": {
+      "const": "2.0.0-dev"
+    },
+    "context_capsule": {
+      "type": "object",
+      "required": [
+        "version",
+        "repository",
+        "commit"
+      ],
+      "properties": {
+        "version": {
+          "const": "1.3.1"
+        },
+        "repository": {
+          "const": "lvlaksim1/context-capsule"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "project_manager": {
+      "type": "object",
+      "required": [
+        "version",
+        "repository",
+        "commit"
+      ],
+      "properties": {
+        "version": {
+          "const": "2.0.0-dev"
+        },
+        "repository": {
+          "const": "lvlaksim1/context-capsule-project-manager"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "anyOf": [
+    {
+      "required": [
+        "context_capsule",
+        "project_manager",
+        "context_capsule_version",
+        "project_manager_version",
+        "provenance",
+        "project_manager_commit",
+        "context_capsule_commit"
+      ]
+    },
     {
       "required": [
         "provenance",
