@@ -157,6 +157,17 @@ def discovery_redirect_changes(
     return changes
 
 
+def installed_project_manager_version(meta: dict) -> str | None:
+    component = meta.get("project_manager")
+    if isinstance(component, dict) and isinstance(component.get("version"), str):
+        return component["version"]
+    explicit = meta.get("project_manager_version")
+    if isinstance(explicit, str):
+        return explicit
+    legacy = meta.get("version")
+    return legacy if isinstance(legacy, str) else None
+
+
 def build_capsule_metadata(
     repository: str,
     core_commit: str,
@@ -877,10 +888,11 @@ def _normalize_legacy_provenance_text(text: str) -> tuple[str, int]:
 def legacy_provenance_changes(files: dict[str, str]) -> dict[str, str]:
     manifest = parse_json_text(files, ".context/manifest.json") or {}
     meta = parse_json_text(files, ".context/capsule.json") or {}
-    if (meta.get("project_manager") or {}).get("version", meta.get("project_manager_version", meta.get("version"))) != PROJECT_MANAGER_VERSION:
+    installed_version = installed_project_manager_version(meta)
+    if installed_version != PROJECT_MANAGER_VERSION:
         raise CapsuleModelError(
             f"legacy provenance normalization requires Project Manager {PROJECT_MANAGER_VERSION}; "
-            f"installed version is {(meta.get('project_manager') or {}).get('version', meta.get('project_manager_version', meta.get('version')))!r}"
+            f"installed version is {installed_version!r}"
         )
 
     sync = manifest.get("sync_policy")
@@ -1389,14 +1401,7 @@ def repair_changes(
 ) -> dict[str, str]:
     existing_manifest = parse_json_text(files, ".context/manifest.json") or {}
     existing_meta = parse_json_text(files, ".context/capsule.json") or {}
-    installed_pm_version = (
-        (existing_meta.get("project_manager") or {}).get(
-            "version",
-            existing_meta.get("project_manager_version", existing_meta.get("version")),
-        )
-        if isinstance(existing_meta.get("project_manager"), dict)
-        else existing_meta.get("project_manager_version", existing_meta.get("version"))
-    )
+    installed_pm_version = installed_project_manager_version(existing_meta)
     if installed_pm_version != PROJECT_MANAGER_VERSION:
         raise CapsuleModelError(
             f"repair never performs a major-version upgrade; installed Project Manager version is "
