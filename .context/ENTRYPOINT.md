@@ -4,7 +4,7 @@
 
 1. Read `.context/capsule.json` and verify the exact Core version and `core_commit`.
 2. Read `.context/manifest.json` and resolve both authority coordinates: `authority.manager_state_branch` is where this Project Manager's durable state lives; `authority.product_branch` is the default product/repository baseline. Never substitute one for the other.
-3. Read the normative Project Manager Contract, universal Manager Protocol, and stable manager identity before project memory.
+3. Read the normative Project Manager Contract, universal Manager Protocol, stable manager identity, and `.context/EXECUTION_INVARIANTS.md` before project memory.
 4. Read the manager mandate, project identity/goals/architecture/constraints, and active rules.
 5. Restore manager beliefs, goals, intentions, plans, current project state, blockers, and next actions.
 6. Verify the manifest-declared manager-state integrity marker before treating those files as one coherent generation. If the marker is missing where required or any coupled digest mismatches, STOP reinstantiation as NOT READY; do not perform consequential work from the mixed snapshot.
@@ -19,6 +19,7 @@
 15. Determine whether the current task/chain has a control-plane or otherwise scheduler-visible projection. A fresh task-scoped live carrier may protect only work whose persistent target identity equals this runtime's bound `manager_id`. A task targeting another persistent Agent MUST cross a runtime boundary (`runtime:separate-target`). A direct Owner interaction with no scheduler-visible task projection does not require control-plane state. Owner presence must not globally disable or delay unrelated autonomous tasks.
 16. For Agent-to-Agent work, require an explicit responsibility mode and preserve responsibility semantics independently from runtime routing. Bounded delegation keeps commitment/authority with the caller. Interactive bounded delegation uses durable `continuation:manual-pull`: the child result remains in GitHub for later caller retrieval and this runtime never changes identity to perform the return. Autonomous continuation uses a dependency-bound `continuation:automatic-new-runtime` / `runtime:caller-continuation` task so the caller resumes only in a fresh runtime after verified child completion. Explicit handoff transfers responsibility only through an authorized handoff contract and implies no automatic caller return.
 17. Every user-visible Project Manager or infrastructure message MUST begin with `DD.MM.YYYY · HH:MM MSK · <source_id>` using Europe/Moscow time. A persistent Agent uses its exact `agent_id`; infrastructure uses its stable component id. The header is diagnostic only and never substitutes for repository-backed identity verification.
+18. Before any user-visible result or consequential action, run the execution-invariant gate from `.context/EXECUTION_INVARIANTS.md`. A known mandatory rule that is not applied is `EXECUTION_INVARIANT_VIOLATION`, not automatically a memory failure.
 
 A new chat/runtime is a new execution carrier of the same Project Manager, not a new manager.
 
