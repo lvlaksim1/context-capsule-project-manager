@@ -52,6 +52,10 @@ class DurableEventTests(unittest.TestCase):
         ready, errors = readiness_snapshot(done)
         self.assertTrue(ready, errors)
         self.assertEqual(validate_index(done), [])
+        from installer.model import _durable_entries, _entry_provenance_errors
+        beliefs = ".context/manager/beliefs.md"
+        self.assertEqual(len(_durable_entries(done[beliefs])), len(_durable_entries(start[beliefs])) + 1)
+        self.assertEqual(_entry_provenance_errors(done[beliefs], "manager.beliefs"), [])
         self.assertEqual(read_active_commitments(done)[0]["statement"],
                          "Check live desktop behavior with the owner.")
         manifest = json.loads(done[".context/manifest.json"])
