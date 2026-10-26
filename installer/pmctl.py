@@ -24,6 +24,7 @@ from installer.model import (
     validate_snapshot,
 )
 from installer.safety import CapsuleSafetyError, confined_local_path, validate_core_commit
+from installer.state_health import inspect as inspect_product_freshness, format_result as format_product_freshness, main as product_freshness_main
 from installer.runtime_guard import (
     LifecycleGuardError,
     load_project_manager_reference,
@@ -319,6 +320,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def require_product_freshness(target: Path) -> None:
+    status, reasons, live = inspect_product_freshness(target)
+    if status != "FRESH":
+        raise LifecycleGuardError(format_product_freshness(status, reasons, live))
+
+
 def cmd_ready(args: argparse.Namespace) -> int:
     target = target_root(args.target)
     try:
@@ -330,6 +337,8 @@ def cmd_ready(args: argparse.Namespace) -> int:
             non_authoritative=args.non_authoritative,
         )
         project_manager_reference = _bound_project_manager_reference(files)
+        if args.require_freshness:
+            require_product_freshness(target)
         ready, reasons = readiness_snapshot(
             files,
             core_reference=project_manager_reference,
@@ -367,6 +376,8 @@ def cmd_recover(args: argparse.Namespace) -> int:
             non_authoritative=args.non_authoritative,
         )
         project_manager_reference = _bound_project_manager_reference(files)
+        if args.require_freshness:
+            require_product_freshness(target)
         pack = build_recovery_pack(
             files,
             max_chars=args.max_chars,
@@ -442,6 +453,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="allow maintenance/audit inspection from a non-authoritative checkout; never declares PM reinstantiable",
     )
+    ready.add_argument("--require-freshness", action="store_true", help="fail closed unless live GitHub product evidence matches a reconciled baseline")
     ready.set_defaults(func=cmd_ready)
 
     recover = sub.add_parser("recover", help="emit a deterministic Project Manager reinstantiation pack")
@@ -453,7 +465,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="emit an explicitly non-authoritative maintenance/audit pack from a divergent checkout",
     )
+    recover.add_argument("--require-freshness", action="store_true", help="fail closed unless live GitHub product evidence matches a reconciled baseline")
     recover.set_defaults(func=cmd_recover)
+
+    product_check = sub.add_parser("product-freshness", help="audit published release and product branch against reconciled baseline")
+    product_check.add_argument("--target", required=True)
+    product_check.set_defaults(func=lambda a: product_freshness_main(["check", "--target", a.target]))
+
+    baseline = sub.add_parser("capture-product-baseline", help="record live GitHub coordinates after explicit reconciliation")
+    baseline.add_argument("--target", required=True)
+    baseline.add_argument("--confirm-reconciled", action="store_true")
+    baseline.set_defaults(func=lambda a: product_freshness_main(["capture", "--target", a.target] + (["--confirm-reconciled"] if a.confirm_reconciled else [])))
 
     return parser
 
