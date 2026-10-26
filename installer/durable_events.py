@@ -192,7 +192,10 @@ def plan_durable_event(
     heading = f"Durable event {item['id']} ({item['kind']})"
     source = "source: " + item["evidence_url"]
     provenance = "authority: " + ("owner-confirmed" if item["owner_confirmed"] else "verified-github")
-    details = [item["summary"], source, provenance]
+    # GitHub verifies the operation, not arbitrary semantic claims supplied in JSON.
+    evidence_fact = f"Verified evidence: {item['kind']} at {item['evidence_url']}"
+    scope = ("Owner-confirmed scope: " if item["owner_confirmed"] else "Reported scope (not independently verified): ") + item["summary"]
+    details = [evidence_fact, scope, source, provenance]
     if item["commitments"]:
         details.append("Commitments: " + ", ".join(f"{c['id']}={c['action']}" for c in item["commitments"]))
     for section, key in (
