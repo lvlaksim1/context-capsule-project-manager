@@ -162,6 +162,21 @@ class DurableEventTests(unittest.TestCase):
             publish_single_commit(race, plan)
         self.assertEqual(race.moves, [])
 
+    def test_opt_in_hook_is_disabled_by_default_and_cannot_infer_approval(self):
+        from pathlib import Path
+        template = (Path(__file__).resolve().parents[1] /
+                    "templates/workflows/pm-durable-events.yml").read_text(encoding="utf-8")
+        self.assertIn("vars.PM_SOURCE_COMMIT", template)
+        self.assertIn("vars.PM_MANAGER_BRANCH", template)
+        self.assertIn("types: [published]", template)
+        self.assertIn("types: [closed]", template)
+        self.assertIn("pull_request.merged == true", template)
+        self.assertIn('event_kind = "release"', template)
+        self.assertIn('event_kind = "merge"', template)
+        self.assertNotIn('event_kind = "owner-acceptance"', template)
+        self.assertIn("--publish", template)
+        self.assertIn("--expected-head", template)
+
     def test_verified_evidence_is_read_from_github(self):
         x = event()
         verify_event(x, fetch=lambda url, token: {"state": "closed", "merged_at": "2026-10-26", "base": {"ref": "main"}})
