@@ -5,6 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 from urllib.error import HTTPError
+from contextlib import redirect_stderr
+from io import StringIO
+from unittest.mock import patch
+
+from installer.pmctl import require_product_freshness
+from installer.runtime_guard import LifecycleGuardError
 
 from installer.state_health import (
     BASELINE_PATH,
@@ -14,6 +20,7 @@ from installer.state_health import (
     inspect,
     load_baseline,
     observe_product,
+    main as freshness_main,
     write_baseline,
 )
 
@@ -133,6 +140,21 @@ class ProductFreshnessTests(unittest.TestCase):
         data["release_sha"] = "not-a-sha"
         with self.assertRaises(FreshnessError):
             ProductEvidence.parse(data)
+
+    def test_capture_refuses_without_explicit_reconciliation(self):
+        with redirect_stderr(StringIO()):
+            result = freshness_main(["capture", "--target", str(self.root)])
+        self.assertEqual(result, 2)
+        self.assertFalse((self.root / BASELINE_PATH).exists())
+
+    def test_ready_strict_gate_cannot_reinstate_stale_product(self):
+        with patch("installer.pmctl.inspect_product_freshness",
+                   return_value=("STALE", ["new release published"], evidence())):
+            with self.assertRaises(LifecycleGuardError):
+                require_product_freshness(self.root)
+        with patch("installer.pmctl.inspect_product_freshness",
+                   return_value=("FRESH", [], evidence())):
+            self.assertIsNone(require_product_freshness(self.root))
 
     def test_att51_regression_known_release_mismatch(self):
         # Regression for Oct 26: structural seal generation 33 was coherent
