@@ -53,6 +53,25 @@ Requires a clean local manager-state checkout matching the expected HEAD; the pr
 
 Triggers: after merge, release, confirmed regression, or direct owner acceptance, submit the relevant event. Automatic *emission* by a supported workflow can call this command; an untrusted trigger cannot manufacture confirmation or secretly capture a new product freshness baseline. A GitHub trigger alone is not a replacement for semantic review.
 
+## Opt-in automatic merge/release trigger
+
+A concrete, disabled-by-default GitHub Actions integration is bundled as
+`templates/workflows/pm-durable-events.yml`. Copy it into a consuming
+repository, configure `PM_MANAGER_BRANCH` and pin `PM_SOURCE_COMMIT` to
+the **installed, approved** Project Manager source revision, and give the
+workflow least-privilege contents:write permission. It reacts to a confirmed
+merged pull request targeted at the product authority branch or a published
+release, verifies it again through the API and atomically records only
+the GitHub fact. It does not fabricate BDI decisions or user approval.
+Concurrent events are serialized per repository. Branch-protection restrictions
+are honored (the workflow fails if it cannot publish).
+
+For a verified regression, submit a successful run link through `persist-event`
+after reviewing what the tests cover. For direct owner acceptance, record only
+an explicit owner-approved event; **never** enable automated owner acceptance
+from a release, webhook, CI run or merge. No downstream workflow is installed
+automatically by this product update.
+
 ## Compact working index
 
 ```bash
