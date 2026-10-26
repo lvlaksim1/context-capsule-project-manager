@@ -203,7 +203,15 @@ def plan_durable_event(
         ("current", "state"), ("current", "next"),
     ):
         path = manifest[section][key]
-        next_files[path] = _append(files[path], heading, details)
+        if section == "manager" and key == "beliefs" and not any(
+            line.startswith("## ") for line in files[path].splitlines()
+        ):
+            # Do not introduce the first section heading into a bullet-based
+            # beliefs file: the legacy provenance parser would then ignore
+            # bullets preceding that heading.
+            next_files[path] = files[path].rstrip("\n") + "\n- " + heading + "; " + "; ".join(details) + "\n"
+        else:
+            next_files[path] = _append(files[path], heading, details)
     handoff = manifest["latest_handoff"]
     next_files[handoff] = _append(files[handoff], heading, details)
 
