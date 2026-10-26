@@ -980,6 +980,8 @@ def manager_state_coupled_paths(manifest: dict) -> list[str]:
         current.get("blockers"),
         current.get("next"),
         manifest.get("latest_handoff"),
+        manager.get("commitments"),
+        manager.get("events"),
     ]
     result: list[str] = []
     for raw in paths:
