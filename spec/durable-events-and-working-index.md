@@ -58,7 +58,9 @@ Triggers: after merge, release, confirmed regression, or direct owner acceptance
 A concrete, disabled-by-default GitHub Actions integration is bundled as
 `templates/workflows/pm-durable-events.yml`. Copy it into a consuming
 repository, configure `PM_MANAGER_BRANCH` and pin `PM_SOURCE_COMMIT` to
-the **installed, approved** Project Manager source revision, and give the
+the **installed, approved** Project Manager source revision recorded in
+`.context/capsule.json`; upgrade that installed binding explicitly before using
+a newer source revision. Mismatches are rejected before publication. Give the
 workflow least-privilege contents:write permission. It reacts to a confirmed
 merged pull request targeted at the product authority branch or a published
 release, verifies it again through the API and atomically records only
