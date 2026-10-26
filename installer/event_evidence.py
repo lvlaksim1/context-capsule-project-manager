@@ -51,6 +51,8 @@ def verify_event(event: dict, *, fetch=None, confirm_owner: bool = False, token:
         raise CapsuleModelError("GitHub evidence response must be an object")
     if kind == "merge" and (result.get("merged_at") is None or result.get("state") != "closed"):
         raise CapsuleModelError("GitHub pull request is not merged")
+    if kind == "merge" and result.get("base", {}).get("ref") != event.get("product_branch"):
+        raise CapsuleModelError("GitHub merged PR does not target the authoritative product branch")
     if kind == "release" and (result.get("draft") is not False or result.get("tag_name") != match.group(1)):
         raise CapsuleModelError("GitHub release is not a published matching release")
     if kind == "verified-regression" and (
