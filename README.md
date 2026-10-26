@@ -95,6 +95,25 @@ Older installations remain compatible; the new gate is opt-in. See
 [product freshness protocol](spec/product-freshness.md) for limitations and
 required manual reconciliation before recapturing evidence.
 
+## Durable event persistence and compact working context
+
+Record a **verified event** and any commitment lifecycle transitions against an
+exact manager-state branch head. The default command only plans; `--publish`
+creates one non-forced GitHub commit containing BDI/current updates, a durable
+event log, a commitment registry, refreshed state seal and compact index.
+
+```bash
+python installer/pmctl.py persist-event --target /repo --event /tmp/verified-event.json --expected-head <sha>
+GITHUB_TOKEN=... python installer/pmctl.py persist-event --target /repo --event /tmp/verified-event.json --expected-head <sha> --publish
+python installer/pmctl.py working-index --target /repo --verify
+python installer/pmctl.py active-commitments --target /repo
+```
+
+Owner acceptance is never inferred from a successful CI run or release.
+Existing capsules remain valid until explicitly updated. The compact working
+index is non-authoritative and links to complete, sealed sources. See
+[durable event and working index protocol](spec/durable-events-and-working-index.md).
+
 ## Recovery budget
 
 The default reinstantiation-pack budget is 131072 characters. Project Manager Contract and
