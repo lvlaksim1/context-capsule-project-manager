@@ -1,0 +1,109 @@
+# Opt-in template: copy to .github/workflows/pm-durable-events.yml in
+# consumer repository. Configure Actions variables PM_MANAGER_BRANCH
+# and PM_SOURCE_COMMIT (pinned 40-hex reviewed PM source SHA).
+# No owner acceptance can be inferred from PR or release.
+name: Project Manager durable evidence
+on:
+  pull_request:
+    types: [closed]
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pm-durable-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  persist:
+    if: github.event_name == 'release' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check configured pins
+        shell: bash
+        env:
+          MANAGER_BRANCH: ${{ vars.PM_MANAGER_BRANCH }}
+          SOURCE_COMMIT: ${{ vars.PM_SOURCE_COMMIT }}
+        run: |
+          test -n "$MANAGER_BRANCH" || { echo "PM_MANAGER_BRANCH is not configured"; exit 1; }
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "PM_SOURCE_COMMIT must be pinned to a full SHA"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.PM_MANAGER_BRANCH }}
+          fetch-depth: 0
+          path: product
+      - uses: actions/checkout@v4
+        with:
+          repository: lvlaksim1/context-capsule-project-manager
+          ref: ${{ vars.PM_SOURCE_COMMIT }}
+          fetch-depth: 0
+          path: pm-tool
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Prepare factual GitHub event
+        id: prepared
+        shell: bash
+        env:
+          HOOK_KIND: ${{ github.event_name }}
+          EVENT_JSON: ${{ github.event_path }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          event = json.loads(pathlib.Path(os.environ["EVENT_JSON"]).read_text())
+          manifest = json.loads(pathlib.Path("product/.context/manifest.json").read_text())
+          repo = manifest["repository"]
+          product_branch = manifest["authority"]["product_branch"]
+          if repo != os.environ["REPOSITORY"]:
+              raise SystemExit("Repository does not match product authority")
+          kind = os.environ["HOOK_KIND"]
+          if kind == "pull_request":
+              pr = event["pull_request"]
+              if not pr.get("merged") or pr["base"]["ref"] != product_branch:
+                  with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+                      out.write("run_event=false\n")
+                  raise SystemExit(0)
+              ident = str(pr["number"])
+              evidence = f"https://github.com/{repo}/pull/{ident}"
+              summary = f"GitHub PR #{ident} merged into {product_branch}; user acceptance not established."
+              event_kind = "merge"
+              event_id = "merged-pr-" + ident
+          elif kind == "release":
+              release = event["release"]
+              if release.get("draft"):
+                  raise SystemExit("Draft release cannot be recorded")
+              tag = release["tag_name"]
+              ident = hashlib.sha256(tag.encode()).hexdigest()[:20]
+              evidence = f"https://github.com/{repo}/releases/tag/{tag}"
+              summary = f"GitHub release {tag} published; user acceptance not established."
+              event_kind = "release"
+              event_id = "published-release-" + ident
+          else:
+              raise SystemExit("Unsupported automatic event")
+          record = {
+              "id": event_id,
+              "kind": event_kind,
+              "summary": summary,
+              "product_repository": repo,
+              "product_branch": product_branch,
+              "evidence_url": evidence,
+              "commitments": []
+          }
+          pathlib.Path("/tmp/pm-durable-event.json").write_text(json.dumps(record))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("run_event=true\n")
+          PY
+      - name: Publish one verified durable transaction
+        if: steps.prepared.outputs.run_event == 'true'
+        working-directory: product
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          python ../pm-tool/installer/pmctl.py persist-event \
+            --target . --event /tmp/pm-durable-event.json \
+            --expected-head "$HEAD_SHA" --publish
