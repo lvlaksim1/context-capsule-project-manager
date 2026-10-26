@@ -25,6 +25,11 @@ from installer.model import (
 )
 from installer.safety import CapsuleSafetyError, confined_local_path, validate_core_commit
 from installer.state_health import inspect as inspect_product_freshness, format_result as format_product_freshness, main as product_freshness_main
+from installer.durable_events import plan_durable_event
+from installer.event_evidence import verify_event
+from installer.github_rest import GitHubRESTBackend
+from installer.github_atomic import GitHubAtomicError, publish_single_commit
+from installer.working_index import INDEX_PATH, index_document, validate_index, read_active_commitments
 from installer.runtime_guard import (
     LifecycleGuardError,
     load_project_manager_reference,
@@ -392,6 +397,97 @@ def cmd_recover(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ensure_clean_capsule_checkout(target: Path) -> str:
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(target), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(target), "status", "--porcelain", "--", ".context"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise CapsuleModelError("durable publication requires a Git checkout") from exc
+    if dirty:
+        raise CapsuleModelError("capsule checkout is dirty; reconcile and commit local changes first")
+    return head
+
+
+def cmd_persist_event(args: argparse.Namespace) -> int:
+    target = target_root(args.target)
+    try:
+        files = load_snapshot(target)
+        authoritative, branch, head = manager_checkout_status(target, files)
+        if not authoritative:
+            raise LifecycleGuardError("event must be published from authoritative manager state")
+        local_head = _ensure_clean_capsule_checkout(target)
+        if local_head != args.expected_head or head != args.expected_head:
+            raise LifecycleGuardError("local HEAD does not match --expected-head")
+        event = json.loads(Path(args.event).read_text(encoding="utf-8"))
+        verify_event(
+            event,
+            confirm_owner=args.confirm_owner_acceptance,
+            token=os.environ.get("GITHUB_TOKEN"),
+        )
+        plan = plan_durable_event(
+            files, event, expected_head=args.expected_head,
+            evidence_verified=True, max_index_chars=args.index_max_chars,
+        )
+        if plan.branch != branch:
+            raise LifecycleGuardError("event target branch differs from manager authority")
+        if not args.publish:
+            print("Durable event plan: VERIFIED, NOT PUBLISHED")
+            print(f"  destination: {plan.repository}@{plan.branch}, expected {plan.expected_head}")
+            for path in sorted(plan.changes):
+                print("  updated: " + path)
+            return 0
+        result_sha = publish_single_commit(GitHubRESTBackend(os.environ.get("GITHUB_TOKEN", "")), plan)
+        print(f"Durable event published atomically: {result_sha}")
+        return 0
+    except (OSError, ValueError, KeyError, GitHubAtomicError, json.JSONDecodeError) as exc:
+        print(f"Durable event: FAIL\n  - {exc}")
+        return 1
+
+
+def cmd_working_index(args: argparse.Namespace) -> int:
+    target = target_root(args.target)
+    try:
+        files = load_snapshot(target)
+        if args.verify:
+            problems = validate_index(files, max_chars=args.max_chars)
+            for problem in problems:
+                print("Working index: " + problem)
+            if problems:
+                return 1
+            print("Working index: VALID FOR CURRENT SEALED GENERATION")
+            return 0
+        result = index_document(files, max_chars=args.max_chars)
+        if args.write:
+            apply_local_changes(target, {INDEX_PATH: result})
+            print(f"Working index written locally: {INDEX_PATH}; commit after review")
+        else:
+            sys.stdout.write(result)
+        return 0
+    except (CapsuleModelError, CapsuleSafetyError, OSError, ValueError, KeyError) as exc:
+        print(f"Working index: FAIL\n  - {exc}")
+        return 1
+
+
+def cmd_active_commitments(args: argparse.Namespace) -> int:
+    target = target_root(args.target)
+    try:
+        files = load_snapshot(target)
+        result = read_active_commitments(files)
+        print(json.dumps({"structured_active": result, "legacy_unenumerated": True,
+            "legacy_source": (json.loads(files[".context/manifest.json"]))["manager"]["intentions"]},
+            ensure_ascii=False, indent=2))
+        return 0
+    except (CapsuleModelError, OSError, ValueError, KeyError) as exc:
+        print(f"Commitment retrieval: FAIL\n  - {exc}")
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pmctl", description="Context Capsule Project Manager lifecycle helper")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -476,6 +572,26 @@ def build_parser() -> argparse.ArgumentParser:
     baseline.add_argument("--target", required=True)
     baseline.add_argument("--confirm-reconciled", action="store_true")
     baseline.set_defaults(func=lambda a: product_freshness_main(["capture", "--target", a.target] + (["--confirm-reconciled"] if a.confirm_reconciled else [])))
+
+    event = sub.add_parser("persist-event", help="verified atomic durable finding and commitment publication")
+    event.add_argument("--target", required=True)
+    event.add_argument("--event", required=True, help="path to durable event JSON")
+    event.add_argument("--expected-head", required=True, help="exact current manager branch commit SHA")
+    event.add_argument("--publish", action="store_true", help="publish one non-forced GitHub commit; default only plans")
+    event.add_argument("--confirm-owner-acceptance", action="store_true")
+    event.add_argument("--index-max-chars", type=int, default=8192)
+    event.set_defaults(func=cmd_persist_event)
+
+    index = sub.add_parser("working-index", help="generate or check bounded non-authoritative index")
+    index.add_argument("--target", required=True)
+    index.add_argument("--max-chars", type=int, default=8192)
+    index.add_argument("--write", action="store_true", help="write locally; requires explicit Git commit")
+    index.add_argument("--verify", action="store_true", help="verify existing index against canonical sealed sources")
+    index.set_defaults(func=cmd_working_index)
+
+    commitments = sub.add_parser("active-commitments", help="retrieve full structured active obligations and legacy source")
+    commitments.add_argument("--target", required=True)
+    commitments.set_defaults(func=cmd_active_commitments)
 
     return parser
 
