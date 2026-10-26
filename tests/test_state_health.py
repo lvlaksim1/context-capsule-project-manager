@@ -119,7 +119,7 @@ class ProductFreshnessTests(unittest.TestCase):
         before = sorted(p.relative_to(self.root).as_posix() for p in self.root.rglob("*") if p.is_file())
         write_baseline(self.root, evidence())
         after = sorted(p.relative_to(self.root).as_posix() for p in self.root.rglob("*") if p.is_file())
-        self.assertEqual(after, before + [BASELINE_PATH])
+        self.assertEqual(after, sorted(before + [BASELINE_PATH]))
         data = json.loads((self.root / BASELINE_PATH).read_text(encoding="utf-8"))
         self.assertEqual(data["reconciliation"], "operator-confirmed")
 
