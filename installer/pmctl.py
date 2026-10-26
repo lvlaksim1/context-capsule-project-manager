@@ -422,6 +422,19 @@ def cmd_persist_event(args: argparse.Namespace) -> int:
         if not authoritative:
             raise LifecycleGuardError("event must be published from authoritative manager state")
         local_head = _ensure_clean_capsule_checkout(target)
+        installed_pm = snapshot_project_manager_commit(files)
+        running_pm = subprocess.run(
+            ["git", "-C", str(PROJECT_MANAGER_ROOT), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        if installed_pm != running_pm:
+            raise LifecycleGuardError("running Project Manager source commit differs from installed capsule provenance; upgrade explicitly before durable publication")
+        reference = _bound_project_manager_reference(files)
+        ready, ready_reasons = readiness_snapshot(
+            files, core_reference=reference, require_core_binding=True,
+        )
+        if not ready:
+            raise LifecycleGuardError("manager is not bound/ready: " + "; ".join(ready_reasons))
         if local_head != args.expected_head or head != args.expected_head:
             raise LifecycleGuardError("local HEAD does not match --expected-head")
         event = json.loads(Path(args.event).read_text(encoding="utf-8"))
