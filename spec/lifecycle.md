@@ -16,6 +16,18 @@ Major-version migration is explicit. v2 `upgrade` currently accepts installed v1
 
 `ready` means the same Project Manager can be reinstantiated in a fresh runtime. It requires substantive project semantics, mandate, BDI active state, current project state, next work, and provenance-bearing beliefs. Handoff is not required for v2 readiness.
 
+## Product freshness gate
+
+Structural VALID and manager READY do not establish product freshness. An optional
+live GitHub check compares an explicitly reconciled product baseline with the
+latest published release identity and the product authority branch head.
+Missing evidence is UNKNOWN, a different release is STALE, and changed branch
+HEAD without changed release is DRIFT (which may reflect context-only commits).
+For consequential work, run `ready --require-freshness` and
+`recover --require-freshness`; neither can accept UNKNOWN/STALE/DRIFT.
+Recording a new baseline requires explicit reconciliation, never automatic
+replacement. Full protocol: [product-freshness.md](product-freshness.md).
+
 ## Commitment continuity
 
 Active intentions survive runtime replacement. A proposed item is not durable responsibility until accepted/active. Completion requires verification; cancellation, invalidation, and supersession are explicit terminal transitions.
