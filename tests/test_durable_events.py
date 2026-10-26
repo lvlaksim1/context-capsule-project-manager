@@ -164,9 +164,11 @@ class DurableEventTests(unittest.TestCase):
 
     def test_verified_evidence_is_read_from_github(self):
         x = event()
-        verify_event(x, fetch=lambda url, token: {"state": "closed", "merged_at": "2026-10-26"})
+        verify_event(x, fetch=lambda url, token: {"state": "closed", "merged_at": "2026-10-26", "base": {"ref": "main"}})
         with self.assertRaisesRegex(CapsuleModelError, "not merged"):
             verify_event(x, fetch=lambda url, token: {"state": "open", "merged_at": None})
+        with self.assertRaisesRegex(CapsuleModelError, "product branch"):
+            verify_event(x, fetch=lambda url, token: {"state": "closed", "merged_at": "date", "base": {"ref": "other"}})
         release = event(kind="release")
         release["evidence_url"] = "https://github.com/owner/repo/releases/tag/v1.2.3"
         verify_event(release, fetch=lambda url, token: {"tag_name": "v1.2.3", "draft": False})
