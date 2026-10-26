@@ -76,6 +76,25 @@ python installer/pmctl.py recover --target /repo
 ```
 
 
+## Live product freshness (optional strict gate)
+
+Structural integrity does not guarantee that the Project Manager has caught up
+with the latest product release. Reconcile the project against GitHub and record
+a reviewed baseline, then use the fail-closed mode for consequential work:
+
+```bash
+python installer/pmctl.py product-freshness --target /repo
+python installer/pmctl.py capture-product-baseline --target /repo --confirm-reconciled
+python installer/pmctl.py ready --target /repo --require-freshness
+python installer/pmctl.py recover --target /repo --require-freshness
+```
+
+An absent baseline, unavailable GitHub, and mismatched authority never count as
+fresh. Product head drift is distinguished from a new published release.
+Older installations remain compatible; the new gate is opt-in. See
+[product freshness protocol](spec/product-freshness.md) for limitations and
+required manual reconciliation before recapturing evidence.
+
 ## Recovery budget
 
 The default reinstantiation-pack budget is 131072 characters. Project Manager Contract and
