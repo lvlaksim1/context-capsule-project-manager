@@ -393,7 +393,9 @@ def cmd_recover(args: argparse.Namespace) -> int:
     except (CapsuleModelError, CapsuleSafetyError, LifecycleGuardError, SystemExit) as exc:
         print(f"Context Capsule recovery: FAIL\n  - {exc}")
         return 1
-    sys.stdout.write(pack)
+    # Recovery output is a UTF-8 transport artifact; Windows console encodings
+    # such as cp1251 cannot encode all governing protocol characters.
+    sys.stdout.buffer.write(pack.encode("utf-8"))
     return 0
 
 

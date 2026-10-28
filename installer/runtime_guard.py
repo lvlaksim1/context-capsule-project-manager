@@ -79,6 +79,8 @@ def load_project_manager_reference(core_root: Path, core_commit: str) -> dict[st
             result = subprocess.run(
                 ["git", "-C", str(core_root), "show", f"{core_commit}:{template_path}"],
                 text=True,
+                encoding="utf-8",
+                errors="strict",
                 capture_output=True,
                 check=False,
             )

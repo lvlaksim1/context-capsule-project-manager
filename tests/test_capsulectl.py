@@ -25,7 +25,7 @@ from installer.model import (
     validate_snapshot,
 )
 from installer.safety import BEGIN_MARKER, END_MARKER, CapsuleSafetyError, render_managed_block
-from installer.runtime_guard import LifecycleGuardError, manager_checkout_status
+from installer.runtime_guard import LifecycleGuardError, load_project_manager_reference, manager_checkout_status
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "templates"
@@ -385,6 +385,43 @@ class ContextCapsuleV2Tests(unittest.TestCase):
                 core_reference=core_reference,
                 require_core_binding=True,
             )
+
+    def test_project_manager_git_templates_decode_as_utf8(self):
+        # Git emits UTF-8 regardless of the Windows console code page.
+        # Subprocess decoding must not depend on cp1251 or other local encodings.
+        sha = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], encoding="ascii"
+        ).strip()
+        bound = load_project_manager_reference(ROOT, sha)
+        for path in CORE_GOVERNING_PATHS:
+            expected = (ROOT / "templates" / path).read_text(encoding="utf-8")
+            self.assertTrue(any(ord(character) > 127 for character in expected), path)
+            self.assertEqual(bound[path], expected, path)
+
+    def test_recovery_pack_output_uses_utf8_when_windows_stdout_is_cp1251(self):
+        import argparse
+        import io
+        from unittest.mock import patch
+        from installer import pmctl
+
+        raw = io.BytesIO()
+        legacy_stdout = io.TextIOWrapper(raw, encoding="cp1251", write_through=True)
+        sample = "# Recovery\n\nUnicode arrow: " + chr(0x2192) + "\n"
+        args = argparse.Namespace(
+            target=str(ROOT), expected_manager_ref=None,
+            non_authoritative=False, require_freshness=False, max_chars=1000
+        )
+        with (
+            patch.object(pmctl, "target_root", return_value=ROOT),
+            patch.object(pmctl, "load_snapshot", return_value={}),
+            patch.object(pmctl, "manager_checkout_status", return_value=(True, "main", "a" * 40)),
+            patch.object(pmctl, "_bound_project_manager_reference", return_value={}),
+            patch.object(pmctl, "build_recovery_pack", return_value=sample),
+            patch.object(pmctl.sys, "stdout", legacy_stdout),
+        ):
+            self.assertEqual(pmctl.cmd_recover(args), 0)
+            legacy_stdout.flush()
+        self.assertEqual(raw.getvalue(), sample.encode("utf-8"))
 
     def test_mixed_belief_file_requires_provenance_per_entry(self):
         overrides = ready_overrides()
