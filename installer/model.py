@@ -11,7 +11,9 @@ from typing import Iterable
 from .safety import CapsuleSafetyError, normalize_repo_path, render_managed_block, validate_core_commit
 
 CONTEXT_CAPSULE_VERSION = "1.3.1"
-PROJECT_MANAGER_VERSION = "2.0.0-dev"
+PROJECT_MANAGER_VERSION = "2.1.0"
+LEGACY_PROJECT_MANAGER_VERSIONS = ("2.0.0-dev",)
+SUPPORTED_PROJECT_MANAGER_VERSIONS = (PROJECT_MANAGER_VERSION, *LEGACY_PROJECT_MANAGER_VERSIONS)
 VERSION = PROJECT_MANAGER_VERSION  # deprecated compatibility alias
 SOURCE_REPOSITORY = "lvlaksim1/context-capsule-project-manager"
 CONTEXT_CAPSULE_REPOSITORY = "lvlaksim1/context-capsule"
@@ -545,11 +547,11 @@ def validate_snapshot(
     else:
         if meta.get("schema") != "context-capsule":
             errors.append("capsule.json: invalid schema")
-        if meta.get("version") != PROJECT_MANAGER_VERSION:
-            errors.append(
-                f"capsule.json: deprecated version alias must be {PROJECT_MANAGER_VERSION}; "
-                "use explicit upgrade for older capsules"
-            )
+        installed_pm_version = installed_project_manager_version(meta)
+        if installed_pm_version not in SUPPORTED_PROJECT_MANAGER_VERSIONS:
+            errors.append(f"capsule.json: unsupported Project Manager version {installed_pm_version!r}")
+        if meta.get("version") != installed_pm_version:
+            errors.append("capsule.json: version alias disagrees with installed Project Manager version")
 
         context_capsule = meta.get("context_capsule")
         project_manager = meta.get("project_manager")
@@ -566,15 +568,13 @@ def validate_snapshot(
                 if context_capsule.get("repository") != CONTEXT_CAPSULE_REPOSITORY:
                     errors.append("capsule.json: context_capsule.repository is invalid")
             if isinstance(project_manager, dict):
-                if project_manager.get("version") != PROJECT_MANAGER_VERSION:
-                    errors.append(
-                        f"capsule.json: Project Manager version must be {PROJECT_MANAGER_VERSION}"
-                    )
+                if project_manager.get("version") != installed_pm_version:
+                    errors.append("capsule.json: Project Manager component version disagrees with installed version")
                 if project_manager.get("repository") != SOURCE_REPOSITORY:
                     errors.append("capsule.json: project_manager.repository is invalid")
             if meta.get("context_capsule_version") not in (None, CONTEXT_CAPSULE_VERSION):
                 errors.append("capsule.json: context_capsule_version disagrees with Context Capsule component")
-            if meta.get("project_manager_version") not in (None, PROJECT_MANAGER_VERSION):
+            if meta.get("project_manager_version") not in (None, installed_pm_version):
                 errors.append("capsule.json: project_manager_version disagrees with Project Manager component")
 
         provenance = meta.get("provenance")
@@ -645,6 +645,11 @@ def validate_snapshot(
             errors.append("manifest.json: discovery_branch is required")
         if meta and manifest.get("repository") != meta.get("repository"):
             errors.append("manifest.json repository does not match capsule.json")
+        if meta:
+            installed_pm_version = installed_project_manager_version(meta)
+            for key in ("context_version", "project_manager_version"):
+                if manifest.get(key) not in (None, installed_pm_version):
+                    errors.append(f"manifest.json: {key} disagrees with installed Project Manager version")
         if not isinstance(manifest.get("manager"), dict):
             errors.append("manifest.json: manager section is required")
         if not isinstance(manifest.get("memory"), dict):
@@ -889,11 +894,8 @@ def legacy_provenance_changes(files: dict[str, str]) -> dict[str, str]:
     manifest = parse_json_text(files, ".context/manifest.json") or {}
     meta = parse_json_text(files, ".context/capsule.json") or {}
     installed_version = installed_project_manager_version(meta)
-    if installed_version != PROJECT_MANAGER_VERSION:
-        raise CapsuleModelError(
-            f"legacy provenance normalization requires Project Manager {PROJECT_MANAGER_VERSION}; "
-            f"installed version is {installed_version!r}"
-        )
+    if installed_version not in SUPPORTED_PROJECT_MANAGER_VERSIONS:
+        raise CapsuleModelError(f"unsupported Project Manager version for provenance normalization: {installed_version!r}")
 
     sync = manifest.get("sync_policy")
     coherence_required = isinstance(sync, dict) and sync.get("manager_state_coherence_required") is True
@@ -1404,11 +1406,8 @@ def repair_changes(
     existing_manifest = parse_json_text(files, ".context/manifest.json") or {}
     existing_meta = parse_json_text(files, ".context/capsule.json") or {}
     installed_pm_version = installed_project_manager_version(existing_meta)
-    if installed_pm_version != PROJECT_MANAGER_VERSION:
-        raise CapsuleModelError(
-            f"repair never performs a major-version upgrade; installed Project Manager version is "
-            f"{installed_pm_version!r}, use upgrade"
-        )
+    if installed_pm_version not in SUPPORTED_PROJECT_MANAGER_VERSIONS:
+        raise CapsuleModelError(f"repair cannot migrate unsupported Project Manager version {installed_pm_version!r}; use explicit upgrade")
     authoritative_branch = existing_manifest.get("authoritative_branch")
     if isinstance(authoritative_branch, str) and authoritative_branch and authoritative_branch != branch:
         raise CapsuleModelError(

@@ -31,7 +31,7 @@ The old branch is migration history. New PM product development belongs here.
 Context Capsule Core and Project Manager are independently versioned products:
 
 - Context Capsule Core: **v1.3.1**;
-- Project Manager: **v2.0.0-dev**.
+- Project Manager: **2.1.0** (stable numerical version).
 
 New and repaired PM installations record both explicitly in `.context/capsule.json`:
 
@@ -43,15 +43,14 @@ New and repaired PM installations record both explicitly in `.context/capsule.js
     "commit": "<core-sha>"
   },
   "project_manager": {
-    "version": "2.0.0-dev",
+    "version": "2.1.0",
     "repository": "lvlaksim1/context-capsule-project-manager",
     "commit": "<pm-sha>"
   }
 }
 ```
 
-The historical top-level `version: "2.0.0-dev"` is retained only as a deprecated
-compatibility alias for the Project Manager version. It must not be read as a Context Capsule
+The top-level `version` is retained as a deprecated compatibility alias for the Project Manager version. It must not be read as a Context Capsule
 Core version. The manifest likewise exposes explicit `context_capsule_version` and
 `project_manager_version`; its historical `context_version` field remains deprecated.
 
@@ -63,6 +62,8 @@ record separate immutable coordinates for Context Capsule Core and Project Manag
 The historical `core_commit` field remains as a deprecated compatibility alias for the
 Project Manager source commit so existing v2 consumers are not invalidated. Legacy metadata
 is accepted and is upgraded in place by an explicit lifecycle operation.
+
+All published versions are stable and strictly numerical (`MAJOR.MINOR.PATCH`), without prefixes or suffixes. See [VERSIONING.md](VERSIONING.md). Historical installed `2.0.0-dev` remains readable for explicit repair only.
 
 ## CLI
 

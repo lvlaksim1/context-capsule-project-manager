@@ -12,6 +12,7 @@ from installer.model import (
     CONTEXT_CAPSULE_VERSION,
     CORE_GOVERNING_PATHS,
     CapsuleModelError,
+    LEGACY_PROJECT_MANAGER_VERSIONS,
     PROJECT_MANAGER_VERSION,
     VERSION,
     build_manager_state_integrity,
@@ -108,6 +109,38 @@ class FakeBackend:
 class ContextCapsuleV2Tests(unittest.TestCase):
     def test_project_manager_version_surface_matches_model(self):
         self.assertEqual((ROOT / "VERSION").read_text(encoding="utf-8").strip(), VERSION)
+
+    def test_numeric_stable_versions_and_legacy_migration(self):
+        self.assertEqual(PROJECT_MANAGER_VERSION, "2.1.0")
+        self.assertEqual(LEGACY_PROJECT_MANAGER_VERSIONS, ("2.0.0-dev",))
+        installed = apply({}, clean_install_changes(
+            {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=ready_overrides()
+        ))
+        meta = json.loads(installed[".context/capsule.json"])
+        manifest = json.loads(installed[".context/manifest.json"])
+        for key in ("version", "project_manager_version"):
+            meta[key] = "2.0.0-dev"
+        meta["project_manager"]["version"] = "2.0.0-dev"
+        for key in ("context_version", "project_manager_version"):
+            manifest[key] = "2.0.0-dev"
+        installed[".context/capsule.json"] = json.dumps(meta) + "\n"
+        installed[".context/manifest.json"] = json.dumps(manifest) + "\n"
+        self.assertEqual(validate_snapshot(installed), [])
+        repaired = apply(installed, repair_changes(
+            installed, TEMPLATES, repository="owner/repo", branch="main", core_commit=CORE_SHA
+        ))
+        self.assertEqual(validate_snapshot(repaired), [])
+        self.assertEqual(json.loads(repaired[".context/capsule.json"])["version"], "2.1.0")
+        self.assertEqual(json.loads(repaired[".context/manifest.json"])["project_manager_version"], "2.1.0")
+
+    def test_version_inconsistency_rejected(self):
+        installed = apply({}, clean_install_changes(
+            {}, TEMPLATES, "owner/repo", "main", CORE_SHA, semantic_overrides=ready_overrides()
+        ))
+        meta = json.loads(installed[".context/capsule.json"])
+        meta["project_manager"]["version"] = "2.0.0-dev"
+        installed[".context/capsule.json"] = json.dumps(meta) + "\n"
+        self.assertTrue(any("version" in e for e in validate_snapshot(installed)))
 
     def test_atomic_publication_and_concurrent_abort(self):
         plan = MutationPlan("owner/repo", "main", "1" * 40, "install", {"AGENTS.md": "x"})
